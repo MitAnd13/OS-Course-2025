@@ -78,7 +78,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
         cprintf("  rbp %016lx  rip %016lx\n", rbp, rip);
         res = debuginfo_rip((uintptr_t)rip, (struct Ripdebuginfo *)&debug_info);
         if (!res) {
-            cprintf("    %.*s:%d: %.*s+%lu\n", RIPDEBUG_BUFSIZ, debug_info.rip_file, debug_info.rip_line,RIPDEBUG_BUFSIZ, debug_info.rip_fn_name,  rip - debug_info.rip_fn_addr);
+            cprintf("    %.*s:%d: %.*s+%lu\n", RIPDEBUG_BUFSIZ, debug_info.rip_file, debug_info.rip_line, RIPDEBUG_BUFSIZ, debug_info.rip_fn_name, rip - debug_info.rip_fn_addr);
         } else {
             cprintf("    not complete info is given\n");
         }

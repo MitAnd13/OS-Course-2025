@@ -89,6 +89,22 @@ env_init(void) {
     /* Set up envs array */
 
     // LAB 3: Your code here
+    env_free_list = envs;
+    struct Env *cur_init = envs;
+
+    for(int i = 0; i < NENV; i++) {
+        cur_init = &envs[i];
+        cur_init->env_status = ENV_FREE;
+        cur_init->env_id = 0;
+        cur_init->env_type = ENV_TYPE_KERNEL;
+        cur_init->env_parent_id = 0;
+        //cur_init->env_link = cur_init + 1;
+        cur_init->env_link = &envs[i+1];
+        cur_init->env_runs = 0;
+        //cur_init++;
+    }
+    //(cur_init-1)->env_link = NULL;
+    envs[NENV-1].env_link = NULL;
 }
 
 /* Allocates and initializes a new environment.
@@ -144,8 +160,11 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
     env->env_tf.tf_ss = GD_KD;
     env->env_tf.tf_cs = GD_KT;
 
-    // LAB 3: Your code here:
-    // static uintptr_t stack_top = 0x2000000;
+    //LAB 3: Your code here:
+    static uintptr_t stack_top = 0x2000000;
+    stack_top -= 2*PAGE_SIZE;
+    env->env_tf.tf_rsp = stack_top;
+
 #else
     env->env_tf.tf_ds = GD_UD | 3;
     env->env_tf.tf_es = GD_UD | 3;
@@ -170,9 +189,145 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
 static int
 bind_functions(struct Env *env, uint8_t *binary, size_t size, uintptr_t image_start, uintptr_t image_end) {
     // LAB 3: Your code here:
+   struct Elf *elf_hdr = (struct Elf *)binary;
 
-    /* NOTE: find_function from kdebug.c should be used */
+    if (elf_hdr->e_magic != ELF_MAGIC) {
+        return -E_INVALID_EXE;
+    }
 
+    uintptr_t tmp;
+    if(__builtin_uaddl_overflow((uintptr_t)binary, size, &tmp)){
+        cprintf("OVERFLOW\n");
+        return -1;
+    }
+    uint8_t *file_end = (uint8_t*)tmp;
+
+    if(__builtin_uaddl_overflow((uintptr_t)binary, elf_hdr->e_shoff, &tmp)){
+        cprintf("OVERFLOW\n");
+        return -1;
+    }
+
+    struct Secthdr *section_header = (struct Secthdr *)tmp;
+    if(((uint8_t*)section_header + elf_hdr->e_shentsize >= file_end) || ((uint8_t*)section_header < binary)){
+        cprintf("Sectionhdr address out of file!!\n");
+        return -1;
+    }
+
+
+    struct Secthdr *strtab_section_header = NULL;
+    struct Elf64_Sym *symtab = NULL;
+    int symb_cnt;
+
+    for (int i = 0; i < elf_hdr->e_shnum; i++) {
+        if(__builtin_uaddl_overflow((uintptr_t)&section_header[i], elf_hdr->e_shentsize, &tmp)){
+            cprintf("OVERFLOW\n");
+            return -1;
+        }
+        if((uint8_t*)tmp >= file_end){
+            cprintf("Sectionhdr address out of file!!\n");
+            return -1;
+        }
+        if(__builtin_uaddl_overflow((uintptr_t)binary, section_header[i].sh_offset, &tmp)){
+            cprintf("OVERFLOW\n");
+            return -1;
+        }
+        if((section_header[i].sh_addralign>1) && (tmp & (section_header[i].sh_addralign - 1))){
+            cprintf("Section allign incorrect\n");
+            return -1;
+        }
+
+        if (section_header[i].sh_type == ELF_SHT_SYMTAB) {
+            if(__builtin_uaddl_overflow((uintptr_t)binary, section_header[i].sh_offset, &tmp)){
+                cprintf("OVERFLOW\n");
+                return -1;
+            }
+            symtab = (struct Elf64_Sym*)tmp;
+            if(__builtin_uaddl_overflow((uintptr_t)symtab, section_header[i].sh_size, &tmp)){
+                cprintf("OVERFLOW\n");
+                return -1;
+            }
+            if((uint8_t*)tmp >= file_end || (uint8_t*)symtab < binary){
+                cprintf("Symtab address out of file!!\n");
+                return -1;
+            }
+
+            strtab_section_header = &section_header[section_header[i].sh_link];
+            /*if( ((uint8_t*)strtab_section_header + elf_hdr->e_shentsize >= file_end) || ((uint8_t*)strtab_section_header < binary)){
+                cprintf("Strtabhdr address out of file!!\n");
+                return -1;
+            }*/
+
+            symb_cnt = section_header[i].sh_size / sizeof(struct Elf64_Sym);
+            break;
+        }
+    }
+
+    if (!symtab || !strtab_section_header) {
+        return 0;
+    }
+
+    if(__builtin_uaddl_overflow((uintptr_t)binary, strtab_section_header->sh_offset, &tmp)){
+        cprintf("OVERFLOW\n");
+        return -1;
+    }
+    char *strtab = (char *)(tmp);
+    if((uint8_t*)strtab + strtab_section_header->sh_size >= file_end || (uint8_t*)strtab < binary){
+        cprintf("Strtab address out of file!!\n");
+        return -1;
+    }
+    if((strtab_section_header->sh_addralign>1)&&(tmp & (strtab_section_header->sh_addralign - 1))){
+        cprintf("Section allign incorrect\n");
+        return -1;
+    }
+
+
+
+    struct Elf64_Sym *symbal;
+    for (int i = 0; i < symb_cnt; i++) {
+        symbal = &symtab[i];
+
+        if (!symbal->st_name) {
+            continue;
+        }
+
+        if(__builtin_uaddl_overflow((uintptr_t)strtab, symbal->st_name, &tmp)){
+            cprintf("OVERFLOW\n");
+            return -1;
+        }
+        char *symname = (char*)tmp;
+        if((uint8_t*)symname + strlen(symname) >= file_end || (uint8_t*)symname < binary){
+            cprintf("Symname address out of file!!\n");
+            return -1;
+        }
+
+
+        uint8_t type = ELF_ST_TYPE(symbal->st_info);
+        if (type != STT_OBJECT) {
+            continue;
+        }
+
+        uint8_t bind = ELF_ST_BIND(symbal->st_info);
+        if (bind != STB_GLOBAL && bind != STB_WEAK) {
+            continue;
+        }
+
+        if(symbal->st_value < image_start || symbal->st_value + sizeof(uintptr_t) >= image_end){
+            cprintf("Symbal addr is out of range!\n");
+            continue;
+        }
+
+        uintptr_t symb_addr = symbal->st_value;
+        if (symb_addr % sizeof(uintptr_t) != 0) {
+            cprintf("Error: symbol %s misaligned at 0x%08lx\n", symname, symb_addr);
+            continue; 
+        }
+
+        tmp = find_function(symname);
+        if(tmp){
+            *(uintptr_t*)(symb_addr) = find_function(symname);
+        }
+    }
+    
     return 0;
 }
 
@@ -219,6 +374,34 @@ bind_functions(struct Env *env, uint8_t *binary, size_t size, uintptr_t image_st
 static int
 load_icode(struct Env *env, uint8_t *binary, size_t size) {
     // LAB 3: Your code here
+    struct Elf *ElfHeader = (struct Elf*)binary;
+    struct Proghdr *ProgramHeader = (struct Proghdr*)(binary + ElfHeader->e_phoff);
+    uintptr_t image_start = UINTPTR_MAX;
+    uintptr_t image_end = 0;
+
+    for(int i = 0; i < ElfHeader->e_phnum; i++){
+        if(ProgramHeader->p_type == ELF_PROG_LOAD){
+            memcpy((uint8_t*)ProgramHeader->p_va, (uint8_t*)(binary + ProgramHeader->p_offset), ProgramHeader->p_filesz);
+            
+            if(ProgramHeader->p_memsz > ProgramHeader->p_filesz){
+                memset((uint8_t*)(ProgramHeader->p_va + ProgramHeader->p_filesz), 0, ProgramHeader->p_memsz - ProgramHeader->p_filesz);
+            }
+
+            if(ProgramHeader->p_va < image_start){
+                image_start = ProgramHeader->p_va;
+            }
+
+            if (ProgramHeader->p_va + ProgramHeader->p_memsz > image_end) {
+                image_end = ProgramHeader->p_va + ProgramHeader->p_memsz;
+            }
+        }
+
+        ProgramHeader++;
+    }
+
+    env->env_tf.tf_rip = ElfHeader->e_entry;
+    bind_functions(env, binary, size, image_start, image_end);
+
 
     return 0;
 }
@@ -232,6 +415,11 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
 void
 env_create(uint8_t *binary, size_t size, enum EnvType type) {
     // LAB 3: Your code here
+    struct Env *proc ; 
+    env_alloc(&proc, 0, type);
+    load_icode(proc, binary, size);
+
+    proc->env_type = type;
 }
 
 
@@ -260,6 +448,13 @@ env_destroy(struct Env *env) {
      * it traps to the kernel. */
 
     // LAB 3: Your code here
+
+    if(curenv == env){
+        env_free(env);
+        sched_yield();
+    }else{
+        env_free(env);
+    }
 }
 
 #ifdef CONFIG_KSPACE
@@ -349,6 +544,14 @@ env_run(struct Env *env) {
     }
 
     // LAB 3: Your code here
+    if(curenv && curenv->env_status == ENV_RUNNING){
+        curenv->env_status = ENV_RUNNABLE;
+    }
+
+    curenv = env;
+    curenv->env_status = ENV_RUNNING;
+    curenv->env_runs++;
+    env_pop_tf(&curenv->env_tf);
 
     while (1)
         ;
