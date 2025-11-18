@@ -45,7 +45,8 @@ static struct Command commands[] = {
         {"timer_start", "Start timer", mon_start},
         {"timer_stop", "Stop timer", mon_stop},
         {"timer_freq", "Get timer frequency", mon_frequency},
-        {"who?", "You won't shut down the real...", mon_who_print}};
+        {"who?", "You won't shut down the real...", mon_who_print}
+    };
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
 
 /* Implementations of basic kernel monitor commands */
@@ -105,16 +106,25 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
 
 int
 mon_start(int argc, char **argv, struct Trapframe *tf) {
+    if (argc != 2) {
+        return 1;
+    } 
+    timer_start(argv[1]);
     return 0;
 }
 
 int
 mon_stop(int argc, char **argv, struct Trapframe *tf) {
+    timer_stop();
     return 0;
 }
 
 int
 mon_frequency(int argc, char **argv, struct Trapframe *tf) {
+    if (argc != 2) {
+        return 1;
+    }
+    timer_cpu_frequency(argv[1]);
     return 0;
 }
 
