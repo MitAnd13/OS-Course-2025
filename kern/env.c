@@ -184,45 +184,172 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
 static int
 bind_functions(struct Env *env, uint8_t *binary, size_t size, uintptr_t image_start, uintptr_t image_end) {
     // LAB 3: Your code here:
-    /* NOTE: find_function from kdebug.c should be used */
-    int i, strtab = -1;
-    struct Elf *elf = (struct Elf *)binary;
-    struct Secthdr *sh = (struct Secthdr *)(binary + elf->e_shoff);
-    const char *sh_str = (char *)binary + sh[elf->e_shstrndx].sh_offset;
-    for (i = 0; i < elf->e_shnum; i++) {
-        if (sh[i].sh_type == ELF_SHT_STRTAB) {
-            if (!strcmp(".strtab", sh_str + sh[i].sh_name)) {
-                strtab = i;
-                break;
-            }
+    
+    
+    if (size < sizeof(struct Elf)) {
+    return false;
+  }
+
+    struct Elf *elf_hdr = (struct Elf *)binary;
+
+  if ((uintptr_t)elf_hdr->e_shoff % _Alignof(struct Elf) != 0) {
+        return false;
+    }
+    if (elf_hdr->e_magic != ELF_MAGIC) {
+        return false;
+    }
+  
+    uintptr_t tmp;
+    if(__builtin_uaddl_overflow((uintptr_t)binary, size, &tmp)){
+        cprintf("Overflow\n");
+        return -1;
+    }
+    uint8_t *file_end = (uint8_t*)tmp;
+
+  uintptr_t sh_table_size; 
+  
+  if (__builtin_mul_overflow(elf_hdr->e_shnum, elf_hdr->e_shentsize, &sh_table_size)){
+    cprintf("Overflow\n");
+    return -1;
+  }
+  
+  if (__builtin_uaddl_overflow((uintptr_t)binary, elf_hdr->e_shoff, &tmp)){ 
+    cprintf("Overflow\n");
+    return -1;
+  }
+  
+  // For checking if table size fits the file size and does not overflow
+  // If we do that, we may not check the same in iterations in cycle,
+  // But we may check that for sure
+  if ((uint8_t*)tmp + sh_table_size > file_end){ 
+    cprintf("Table size does not fit file\n");
+    return -1;
+  }
+
+    struct Secthdr *section_header = (struct Secthdr *)tmp;
+    
+    if(((uint8_t*)section_header + elf_hdr->e_shentsize >= file_end) || ((uint8_t*)section_header < binary)){
+        cprintf("Sectionhdr address out of file!!");
+        return -1;
+    }
+
+
+    struct Secthdr *strtab_section_header = NULL;
+    struct Elf64_Sym *symtab = NULL;
+    int symb_cnt;
+
+    for (int i = 0; i < elf_hdr->e_shnum; i++) {
+        if(__builtin_uaddl_overflow((uintptr_t)&section_header[i], elf_hdr->e_shentsize, &tmp)){
+            cprintf("Overflow\n");
+            return -1;
         }
-    }
-    if (strtab < 0) {
-        panic("Can't find strtab!\n");
-        return 0;
-    }
-    const char *str = (char *)binary + sh[strtab].sh_offset;
-    for (int i = 0; i < elf->e_shnum; i++) {
-        if (sh[i].sh_type == ELF_SHT_SYMTAB) {
-            if (!strcmp(".symtab", sh_str + sh[i].sh_name)) {
-                struct Elf64_Sym *sym = (struct Elf64_Sym *)(binary + sh[i].sh_offset);
-                int num_sym = sh[i].sh_size / sizeof(sym[0]);
-                int j;
-                for (j = 0; j < num_sym; j++) {
-                    if (ELF64_ST_BIND(sym[j].st_info) == STB_GLOBAL && ELF64_ST_TYPE(sym[j].st_info) == STT_OBJECT && sym[j].st_size == sizeof(void *)) {
-                        const char *name = str + sym[j].st_name;
-                        uintptr_t addr = find_function(name);
-                        if (addr) {
-                            if (sym[j].st_value >= image_start && sym[j].st_value <= image_end) {
-                                memcpy((void *)sym[j].st_value, &addr, sizeof(void *));
-                            }
-                        }
-                    }
-                }
+        if((uint8_t*)tmp >= file_end){
+            cprintf("Sectionhdr address out of file\n");
+            return -1;
+        }
+        if(__builtin_uaddl_overflow((uintptr_t)binary, section_header[i].sh_offset, &tmp)){
+            cprintf("Overflow\n");
+            return -1;
+        }
+        if((section_header[i].sh_addralign>1) && (tmp & (section_header[i].sh_addralign - 1))){
+            cprintf("Section allign incorrect\n");
+            return -1;
+        }
+
+        if (section_header[i].sh_type == ELF_SHT_SYMTAB) {
+      if (section_header[i].sh_size % sizeof(struct Elf64_Sym) != 0) {
+        cprintf("Symlink is corrupted\n");
+        return -1;
+      }
+            if(__builtin_uaddl_overflow((uintptr_t)binary, section_header[i].sh_offset, &tmp)){
+                cprintf("Overflow\n");
+                return -1;
             }
+            symtab = (struct Elf64_Sym*)tmp;
+            if(__builtin_uaddl_overflow((uintptr_t)symtab, section_header[i].sh_size, &tmp)){
+                cprintf("Overflown");
+                return -1;
+            }
+            if((uint8_t*)tmp >= file_end || (uint8_t*)symtab < binary){
+                cprintf("Symtab address out of file\n");
+                return -1;
+            }
+            
+            strtab_section_header = &section_header[section_header[i].sh_link];
+            /*if( ((uint8_t*)strtab_section_header + elf_hdr->e_shentsize >= file_end) || ((uint8_t*)strtab_section_header < binary)){
+                cprintf("Strtabhdr address out of file!!\n");
+                return -1;
+            }*/
+
+            symb_cnt = section_header[i].sh_size / sizeof(struct Elf64_Sym);
+            break;
         }
     }
 
+    if (!symtab || !strtab_section_header) {
+        return 0;
+    }
+    
+    if(__builtin_uaddl_overflow((uintptr_t)binary, strtab_section_header->sh_offset, &tmp)){
+        cprintf("Overflow\n");
+        return -1;
+    }
+    char *strtab = (char *)(tmp);
+    if((uint8_t*)strtab + strtab_section_header->sh_size >= file_end || (uint8_t*)strtab < binary){
+        cprintf("Strtab address out of file\n");
+        return -1;
+    }
+    if((strtab_section_header->sh_addralign>1)&&(tmp & (strtab_section_header->sh_addralign - 1))){
+        cprintf("Section allign is incorrect\n");
+        return -1;
+    }
+
+    struct Elf64_Sym *symbal;
+    for (int i = 0; i < symb_cnt; i++) {
+        symbal = &symtab[i];
+
+        if (!symbal->st_name) {
+            continue;
+        }
+
+        if(__builtin_uaddl_overflow((uintptr_t)strtab, symbal->st_name, &tmp)){
+            cprintf("Overflow\n");
+            return -1;
+        }
+        char *symname = (char*)tmp;
+        
+        if((uint8_t*)symname + strlen(symname) >= file_end || (uint8_t*)symname < binary){
+            cprintf("Symname address out of file\n");
+            return -1;
+        }
+
+
+        uint8_t type = ELF_ST_TYPE(symbal->st_info);
+        if (type != STT_OBJECT) {
+            continue;
+        }
+
+        uint8_t bind = ELF_ST_BIND(symbal->st_info);
+        if (bind != STB_GLOBAL && bind != STB_WEAK) {
+            continue;
+        }
+
+        if(symbal->st_value < image_start || symbal->st_value + sizeof(uintptr_t) >= image_end){
+            cprintf("Symbal addr is out of range\n");
+            continue;
+        }
+
+        uintptr_t symb_addr = symbal->st_value;
+        if (symb_addr % sizeof(uintptr_t) != 0) {
+            cprintf("Error: symbol %s misaligned at 0x%08lx\n", symname, symb_addr);
+            continue; 
+        }
+
+        tmp = find_function(symname);
+        if(tmp){
+            *(uintptr_t*)(symb_addr) = find_function(symname);
+        }
+    }
     return 0;
 }
 
