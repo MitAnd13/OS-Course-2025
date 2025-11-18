@@ -12,6 +12,8 @@
 #include <kern/monitor.h>
 #include <kern/kclock.h>
 #include <kern/kdebug.h>
+#include <kern/tsc.h>
+#include <kern/timer.h>
 #include <kern/env.h>
 #include <kern/trap.h>
 
@@ -23,6 +25,9 @@ int mon_help(int argc, char **argv, struct Trapframe *tf);
 int mon_kerninfo(int argc, char **argv, struct Trapframe *tf);
 int mon_backtrace(int argc, char **argv, struct Trapframe *tf);
 int mon_dumpcmos(int argc, char **argv, struct Trapframe *tf);
+int mon_start(int argc, char **argv, struct Trapframe *tf);
+int mon_stop(int argc, char **argv, struct Trapframe *tf);
+int mon_frequency(int argc, char **argv, struct Trapframe *tf);
 int mon_who_print(int argc, char **argv, struct Trapframe *tf);
 
 struct Command {
@@ -37,6 +42,9 @@ static struct Command commands[] = {
         {"kerninfo", "Display information about the kernel", mon_kerninfo},
         {"backtrace", "Print stack backtrace", mon_backtrace},
         {"dumpcmos", "Display CMOS contents", mon_dumpcmos},
+        {"timer_start", "Start timer", mon_start},
+        {"timer_stop", "Stop timer", mon_stop},
+        {"timer_freq", "Get timer frequency", mon_frequency},
         {"who?", "You won't shut down the real...", mon_who_print}};
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
 
@@ -89,6 +97,24 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
         rbp = (uint64_t) * (uint64_t *)rbp;
         rip = (uint64_t) * ((uint64_t *)rbp + 1);
     }
+    return 0;
+}
+
+/* Implement timer_start (mon_start), timer_stop (mon_stop), timer_freq (mon_frequency) commands. */
+// LAB 5: Your code here:
+
+int
+mon_start(int argc, char **argv, struct Trapframe *tf) {
+    return 0;
+}
+
+int
+mon_stop(int argc, char **argv, struct Trapframe *tf) {
+    return 0;
+}
+
+int
+mon_frequency(int argc, char **argv, struct Trapframe *tf) {
     return 0;
 }
 
