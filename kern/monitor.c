@@ -15,6 +15,7 @@
 #include <kern/tsc.h>
 #include <kern/timer.h>
 #include <kern/env.h>
+#include <kern/pmap.h>
 #include <kern/trap.h>
 
 #define WHITESPACE "\t\r\n "
@@ -28,6 +29,7 @@ int mon_dumpcmos(int argc, char **argv, struct Trapframe *tf);
 int mon_start(int argc, char **argv, struct Trapframe *tf);
 int mon_stop(int argc, char **argv, struct Trapframe *tf);
 int mon_frequency(int argc, char **argv, struct Trapframe *tf);
+int mon_memory(int argc, char **argv, struct Trapframe *tf);
 int mon_who_print(int argc, char **argv, struct Trapframe *tf);
 
 struct Command {
@@ -45,6 +47,7 @@ static struct Command commands[] = {
         {"timer_start", "Start timer", mon_start},
         {"timer_stop", "Stop timer", mon_stop},
         {"timer_freq", "Get timer frequency", mon_frequency},
+        {"memory", "Display allocated memory pages", mon_memory},
         {"who?", "You won't shut down the real...", mon_who_print}
     };
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
@@ -125,6 +128,13 @@ mon_frequency(int argc, char **argv, struct Trapframe *tf) {
         return 1;
     }
     timer_cpu_frequency(argv[1]);
+    return 0;
+}
+
+// LAB 6: Your code here
+/* Implement memory (mon_memory) commands. */
+int
+mon_memory(int argc, char **argv, struct Trapframe *tf) {
     return 0;
 }
 
