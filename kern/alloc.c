@@ -58,6 +58,7 @@ test_alloc(uint8_t nbytes) {
                 p += p->size;
                 p->size = nunits;
             }
+            spin_unlock(&kernel_lock);
             return (void *)(p + 1);
         }
 
