@@ -629,6 +629,15 @@ check_virtual_tree(struct Page *page, int class) {
 void
 dump_virtual_tree(struct Page *node, int class) {
     // LAB 7: Your code here
+    if ((node->state & NODE_TYPE_MASK) == MAPPING_NODE) {
+        cprintf("MAPPING_NODE: phy: %p, class: %d\n", (void *)PTE_ADDR(node->phy->addr), class);
+    }
+    if (node->left) {
+        dump_virtual_tree(node->left, class - 1);
+    }
+    if (node->right) {
+        dump_virtual_tree(node->right, class - 1);
+    }
 }
 
 void
@@ -672,6 +681,35 @@ dump_page_table(pte_t *pml4) {
     cprintf("Page table:\n");
     // LAB 7: Your code here
     (void)addr;
+    for (size_t i = NUSERPML4; i < PML4_ENTRY_COUNT; i++) {
+        pdpe_t *pdp = (pdpe_t *) KADDR(PTE_ADDR(pml4[i]));
+        for (size_t j = 0; j < PDP_ENTRY_COUNT; j++) {
+            if (pdp[j] & PTE_PS) {
+                dump_entry(pdp[j], 1 * GB, 0);
+                continue;
+            }
+            if (!(pdp[j] & PTE_P)) {
+				continue;
+			}
+            pde_t *pd = (pde_t *) KADDR(PTE_ADDR(pdp[j]));
+            for (size_t k = 0; k < PD_ENTRY_COUNT; k++) {
+                if (pd[k] & PTE_PS) {
+                    dump_entry(pd[k], 2 * MB, 0);
+                    continue;
+                }
+                if (!(pd[k] & PTE_P)) {
+					continue;
+				}
+                pte_t *pt = (pte_t *) KADDR(PTE_ADDR(pd[k]));
+                for (size_t m = 0; m < PT_ENTRY_COUNT; m++) {
+                    if (!(pt[m] & PTE_P)) {
+						continue;
+					}
+                    dump_entry(pt[m], 4 * KB, 0);
+                }
+            }
+        }
+    }
 }
 
 inline static int
@@ -775,8 +813,16 @@ static void
 memcpy_page(struct AddressSpace *dst, uintptr_t va, struct Page *page) {
     assert(current_space);
     assert(dst);
-
     // LAB 7: Your code here
+    struct AddressSpace *const current = switch_address_space(dst);
+
+    const void *const src = KADDR(page2pa(page));
+    const size_t size = CLASS_SIZE(page->class);
+	set_wp(0);
+    nosan_memcpy((void *)va, src, size);
+    set_wp(1);
+    switch_address_space(current);
+
 }
 
 static void
@@ -858,8 +904,15 @@ unmap_page(struct AddressSpace *spc, uintptr_t addr, int class) {
      * TIP: this resembles closely unmapping code */
 
     // LAB 7: Your code here
+	size_t pdi0 = PD_INDEX(addr), pdi1 = PD_INDEX(end);
 
-    size_t pdi0 = 0, pdi1 = 0;
+    if (pdi0 > pdi1) pdi1 = PD_ENTRY_COUNT;
+
+    if (class >= 9) {
+        remove_pt(pd, addr, 2 * MB, pdi0, pdi1);
+        goto finish;
+    }
+
 
     /* Return if page is not present or
      * split 2*MB page into 4KB pages if required.
@@ -871,8 +924,24 @@ unmap_page(struct AddressSpace *spc, uintptr_t addr, int class) {
 
     // LAB 7: Your code here
 
-    (void)pdi0, (void)pdi1;
-    pte_t *pt = NULL;
+   // Page is not present
+    if (!(pd[pdi0] & PTE_P))
+        return;
+
+    // If whole entry is mapped as single page
+    if (pd[pdi0] & PTE_PS) {
+        // Split into smaller pages
+        pde_t old = pd[pdi0];
+        res = alloc_pt(pd + pdi0);
+        assert(res == 0);
+        pte_t *pt = KADDR(PTE_ADDR(pd[pdi0]));
+        res = alloc_fill_pt(pt, old & ~PTE_PS, 4 * KB, 0, PT_ENTRY_COUNT);
+        assert(res == 0);
+        inval_start = ROUNDDOWN(inval_start, 2 * MB);
+        inval_end = ROUNDUP(inval_end, 2 * MB);
+    }
+
+    pte_t *pt = KADDR(PTE_ADDR(pd[pdi0]));
 
     /* Unmap 4KB hw pages */
     size_t pti0 = PT_INDEX(addr), pti1 = PT_INDEX(end);
@@ -975,8 +1044,16 @@ map_page(struct AddressSpace *spc, uintptr_t addr, struct Page *page, int flags)
     /* Calculate indexes and fill PD range if page size is larger than 2MB */
 
     // LAB 7: Your code here
-    (void)pd;
-    size_t pdi0 = 0, pdi1 = 0;
+    size_t pdi0 = PD_INDEX(addr), pdi1 = PD_INDEX(end);
+    if (pdi0 > pdi1) {
+        pdi1 = PD_ENTRY_COUNT;
+    }
+
+    /* Fill PD range if page size is larger than 2MB */
+    if (page->class >= 9) {
+        return alloc_fill_pt(pd, base, 2 * MB, pdi0, pdi1);
+    }
+
 
     /* Allocate empty pt or split 2MB page into 4KB pages if required and
      * calculate virtual address into pt.
@@ -985,8 +1062,28 @@ map_page(struct AddressSpace *spc, uintptr_t addr, struct Page *page, int flags)
 
     // LAB 7: Your code here
 
-    (void)pdi0, (void)pdi1;
-    pte_t *pt = NULL;
+    if (!(pd[pdi0] & PTE_P)) {
+        /* Try to allocate page directory */
+        int res = alloc_pt(pd + pdi0);
+        if (res < 0) {
+            return -E_NO_MEM;
+        }
+    } else if (pd[pdi0] & PTE_PS) {
+        /* Split 2MB page into 4KB pages */
+        pde_t old = pd[pdi0];
+        int res = alloc_pt(pd + pdi0);
+        if (res < 0) {
+            return -E_NO_MEM;
+        }
+        pte_t *pt = KADDR(PTE_ADDR(pd[pdi0]));
+        res = alloc_fill_pt(pt, old & ~PTE_PS, 4 * KB, 0, PT_ENTRY_COUNT);
+        if (res < 0) {
+            return -E_NO_MEM;
+        }
+    }
+
+    pte_t *pt = KADDR(PTE_ADDR(pd[pdi0]));
+
 
     /* If requested region is larger than or equal to 4KB (at least one whole page) */
 
@@ -1469,8 +1566,23 @@ struct AddressSpace *
 switch_address_space(struct AddressSpace *space) {
     assert(space);
     // LAB 7: Your code here
+	if (space == current_space) {
+        return current_space;
+    }
 
-    return NULL;
+    struct AddressSpace *old = current_space;
+
+    if (trace_memory) {
+        pml4e_t old_pml4 = rcr3();
+        cprintf("Switching PML4 from %p to %p (paddr 0x%016lX to 0x%016lX)\n",
+                KADDR(old_pml4), space->pml4, old_pml4, PADDR(space->pml4));
+    }
+
+    lcr3(PADDR(space->pml4));
+    current_space = space;
+
+    return old;
+
 }
 
 /* Buffers for filler pages are statically allocated for simplicity
@@ -1737,6 +1849,8 @@ init_memory(void) {
     // LAB 7: Your code here
     // NOTE: You need to check if map_physical_region returned 0 everywhere! (and panic otherwise)
     // Map [0, max_memory_map_addr] to [KERN_BASE_ADDR, KERN_BASE_ADDR + max_memory_map_addr] as RW- + ALLOC_WEAK
+	res = map_physical_region(&kspace, KERN_BASE_ADDR, 0, max_memory_map_addr,
+                              PROT_R | PROT_W | ALLOC_WEAK);
 
     assert(!res);
 
@@ -1749,6 +1863,12 @@ init_memory(void) {
     assert(!((uintptr_t)__text_start & CLASS_MASK(0)));
     assert(__text_end - __text_start < MAX_LOW_ADDR_KERN_SIZE);
     assert((uintptr_t)(end - KERN_BASE_ADDR) < MIN(BOOT_MEM_SIZE, max_memory_map_addr));
+	
+	res = map_physical_region(&kspace,
+                              (uintptr_t)__text_start,
+                              PADDR(__text_start),
+                              __text_end - __text_start,
+                              PROT_R | PROT_W | PROT_X);
 
     assert(!res);
 
@@ -1757,7 +1877,19 @@ init_memory(void) {
     // LAB 7: Your code here
     // Map [PADDR(bootstack), PADDR(bootstack) + KERN_STACK_SIZE] to [KERN_STACK_TOP - KERN_STACK_SIZE, KERN_STACK_TOP] as RW-
     // Map [PADDR(pfstack), PADDR(pfstack) + KERN_PF_STACK_SIZE] to [KERN_PF_STACK_TOP - KERN_PF_STACK_SIZE, KERN_PF_STACK_TOP] as RW-
+    res = map_physical_region(&kspace,
+                              KERN_STACK_TOP - KERN_STACK_SIZE,
+                              PADDR(bootstack),
+                              KERN_STACK_SIZE,
+                              PROT_R | PROT_W);
+
     assert(!res);
+    res = map_physical_region(&kspace,
+                              KERN_PF_STACK_TOP - KERN_PF_STACK_SIZE,
+                              PADDR(pfstack),
+                              KERN_PF_STACK_SIZE,
+                              PROT_R | PROT_W);
+
     assert(!res);
 
 #ifdef SANITIZE_SHADOW_BASE
@@ -1771,6 +1903,12 @@ init_memory(void) {
             // LAB 7: Your code here
             // Map [mstart->PhysicalStart, mstart->PhysicalStart+mstart->NumberOfPages*PAGE_SIZE] to
             //     [mstart->VirtualStart, mstart->VirtualStart+mstart->NumberOfPages*PAGE_SIZE] as RW-
+            res = map_physical_region(&kspace,
+                                      mstart->VirtualStart,
+                                      mstart->PhysicalStart,
+                                      mstart->NumberOfPages * PAGE_SIZE,
+                                      PROT_R | PROT_W);
+
             assert(!res);
         }
     }

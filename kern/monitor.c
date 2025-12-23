@@ -52,7 +52,6 @@ static struct Command commands[] = {
         {"memory", "Display allocated memory pages", mon_memory},
         {"pagetable", "Display current page table", mon_pagetable},
         {"virt", "Display virtual memory tree", mon_virt},
-};
         {"who?", "You won't shut down the real...", mon_who_print}
     };
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
@@ -149,12 +148,14 @@ mon_memory(int argc, char **argv, struct Trapframe *tf) {
 int
 mon_pagetable(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
+    dump_page_table(current_space->pml4);
     return 0;
 }
 
 int
 mon_virt(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
+    dump_virtual_tree(current_space->root, current_space->root->class);
     return 0;
 }
 
