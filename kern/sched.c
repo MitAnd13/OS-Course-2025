@@ -25,26 +25,15 @@ sched_yield(void) {
      * below to halt the cpu */
 
     // LAB 3: Your code here:
-    int cur_id, parent_id;
-    if (curenv) {
-        cur_id = ENVX(curenv->env_id); // see env.h -> env_id structure
-    } else {
-        cur_id = 0;
+    int id  = curenv ? ENVX(curenv->env_id) : 0;
+    int j;
+    for (int i = 1; i <= NENV; i++) {
+        j = (id + i) % NENV;
+        if (envs[j].env_status == ENV_RUNNABLE) 
+            env_run(envs + j);
     }
-
-    parent_id = cur_id;
-    while (1) {
-        cur_id = (cur_id + 1) % NENV;
-        if (envs[cur_id].env_status == ENV_RUNNABLE) {
-            env_run(&envs[cur_id]);
-        }
-        if (parent_id == cur_id) {
-            if (envs[cur_id].env_status == ENV_RUNNING) {
-                env_run(&envs[cur_id]);
-            }
-            break;
-        }
-    }
+    if (curenv && curenv->env_status == ENV_RUNNING)
+        env_run(curenv); 
 
     cprintf("Halt\n");
 
@@ -82,5 +71,6 @@ sched_halt(void) {
             "hlt\n" ::"a"(cpu_ts.ts_rsp0));
 
     /* Unreachable */
-    for (;;);
+    for (;;)
+        ;
 }

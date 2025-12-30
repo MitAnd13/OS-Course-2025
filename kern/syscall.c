@@ -14,15 +14,45 @@
 #include <kern/trap.h>
 #include <kern/traceopt.h>
 
+static inline void
+copy_from_user_asm(void *dst, const void *src, size_t n) {
+    const uint8_t *s = (const uint8_t *)src;
+    uint8_t *d = (uint8_t *)dst;
+
+    for (size_t i = 0; i < n; i++) {
+        asm volatile(
+            "movb (%0), %%al\n\t"
+            "movb %%al, (%1)\n\t"
+            :
+            : "r"(s + i), "r"(d + i)
+            : "al", "memory"
+        );
+    }
+}
+
+
 /* Print a string to the system console.
  * The string is exactly 'len' characters long.
  * Destroys the environment on memory errors. */
 static int
 sys_cputs(const char *s, size_t len) {
-    // LAB 8: Your code here
+    if (len > 0)
+        user_mem_assert(curenv, s, len, PROT_R | PROT_USER_);
 
-    /* Check that the user has permission to read memory [s, s+len).
-     * Destroy the environment if not. */
+    char buf[256];
+
+    while (len > 0) {
+        size_t m = len;
+        if (m > sizeof(buf)) m = sizeof(buf);
+
+        copy_from_user_asm(buf, s, m);
+
+        for (size_t i = 0; i < m; i++)
+            cputchar(buf[i]);
+
+        s += m;
+        len -= m;
+    }
 
     return 0;
 }
@@ -32,7 +62,7 @@ sys_cputs(const char *s, size_t len) {
 static int
 sys_cgetc(void) {
     // LAB 8: Your code here
-
+    return cons_getc();
     return 0;
 }
 
@@ -40,7 +70,8 @@ sys_cgetc(void) {
 static envid_t
 sys_getenvid(void) {
     // LAB 8: Your code here
-
+    assert(curenv);
+    return curenv->env_id;
     return 0;
 }
 
@@ -52,15 +83,19 @@ sys_getenvid(void) {
 static int
 sys_env_destroy(envid_t envid) {
     // LAB 8: Your code here.
+    struct Env *env;
+    int r = envid2env(envid, &env, true);
+    if (r < 0)
+        return r;
 
-#if 0 /* TIP: Use this snippet to log required for passing grade tests info */
     if (trace_envs) {
         cprintf(env == curenv ?
                         "[%08x] exiting gracefully\n" :
                         "[%08x] destroying %08x\n",
                 curenv->env_id, env->env_id);
     }
-#endif
+
+    env_destroy(env);
 
     return 0;
 }
@@ -72,6 +107,20 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
      * Return any appropriate return value. */
 
     // LAB 8: Your code here
+
+    switch (syscallno) {
+    case SYS_cputs:
+        sys_cputs((const char *)a1, (size_t)a2);
+        return 0;
+    case SYS_cgetc:
+        return sys_cgetc();
+    case SYS_getenvid:
+        return sys_getenvid();
+    case SYS_env_destroy:
+        return sys_env_destroy((envid_t)a1);
+    default:
+        return -E_NO_SYS;
+    }
 
     return -E_NO_SYS;
 }

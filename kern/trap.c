@@ -95,21 +95,86 @@ trapname(int trapno) {
     return "(unknown trap)";
 }
 
+#ifdef CONFIG_KSPACE
+    extern void clock_thdlr(void);
+    extern void timer_thdlr(void);
+#else
+    extern void th_divide(void);
+    extern void th_debug(void);
+    extern void th_nmi(void);
+    extern void th_brkpt(void);
+    extern void th_oflow(void);
+    extern void th_bound(void);
+    extern void th_illop(void);
+    extern void th_device(void);
+    extern void th_dblflt(void);
+    extern void th_tss(void);
+    extern void th_segnp(void);
+    extern void th_stack(void);
+    extern void th_gpflt(void);
+    extern void th_pgflt(void);
+    extern void th_fperr(void);
+    extern void th_align(void);
+    extern void th_mchk(void);
+    extern void th_simderr(void);
+    extern void th_syscall(void);
+    extern void trap_syscall(void);
+    extern void trap_irq_timer(void);
+    extern void trap_irq_clock(void);
+    extern void trap_irq_spurious(void);
+    extern void trap_irq_kbd(void);
+    extern void trap_irq_serial(void);
+    extern void trap_irq_ide(void);
+    extern void trap_irq_error(void);
+#endif
+
 void
 trap_init(void) {
     // LAB 4: Your code here
-    extern void (*clock_thdlr)(void);
-    idt[IRQ_OFFSET + IRQ_CLOCK] = GATE(0, GD_KT, (uint64_t)&clock_thdlr, 0);    
     // LAB 5: Your code here
+#ifdef CONFIG_KSPACE
+    idt[IRQ_OFFSET + IRQ_TIMER] = GATE(0, GD_KT, (uintptr_t)timer_thdlr, 0);
+    idt[IRQ_OFFSET + IRQ_CLOCK] = GATE(0, GD_KT, (uintptr_t)clock_thdlr, 0);
+#else
+    // LAB 8: Insert trap handlers into IDT
 
-    // LAB 8: Your code here
-    /* Insert trap handlers into IDT */
+    // 0–7: без кода ошибки
+    idt[T_DIVIDE] = GATE(0, GD_KT, th_divide, 0);
+    idt[T_DEBUG]  = GATE(0, GD_KT, th_debug,  0);
+    idt[T_NMI]    = GATE(0, GD_KT, th_nmi,    0);
+    idt[T_BRKPT]  = GATE(0, GD_KT, th_brkpt,  3);
+    idt[T_OFLOW]  = GATE(0, GD_KT, th_oflow,  0);
+    idt[T_BOUND]  = GATE(0, GD_KT, th_bound,  0);
+    idt[T_ILLOP]  = GATE(0, GD_KT, th_illop,  0);
+    idt[T_DEVICE] = GATE(0, GD_KT, th_device, 0);
 
-    /* Setup #PF handler dedicated stack
-     * It should be switched on #PF because
-     * #PF is the only kind of exception that
-     * can legally happen during normal kernel
-     * code execution */
+    // 8: double fault — с error code
+    idt[T_DBLFLT] = GATE(0, GD_KT, th_dblflt, 0);
+
+    // 10–14, 17: с error code
+    idt[T_TSS]    = GATE(0, GD_KT, th_tss,    0);
+    idt[T_SEGNP]  = GATE(0, GD_KT, th_segnp,  0);
+    idt[T_STACK]  = GATE(0, GD_KT, th_stack,  0);
+    idt[T_GPFLT]  = GATE(0, GD_KT, th_gpflt,  0);
+    idt[T_PGFLT]  = GATE(0, GD_KT, th_pgflt,  0);
+
+    idt[T_FPERR]   = GATE(0, GD_KT, th_fperr,   0);
+    idt[T_ALIGN]   = GATE(0, GD_KT, th_align,   0);
+    idt[T_MCHK]    = GATE(0, GD_KT, th_mchk,    0);
+    idt[T_SIMDERR] = GATE(0, GD_KT, th_simderr, 0);
+
+    idt[T_SYSCALL] = GATE(0, GD_KT, trap_syscall, 3);
+
+    idt[IRQ_OFFSET + IRQ_SPURIOUS] = GATE(0, GD_KT, trap_irq_spurious, 0);
+    idt[IRQ_OFFSET + IRQ_SERIAL]   = GATE(0, GD_KT, trap_irq_serial,   0);
+    idt[IRQ_OFFSET + IRQ_TIMER]    = GATE(0, GD_KT, trap_irq_timer,    0);
+    idt[IRQ_OFFSET + IRQ_CLOCK]    = GATE(0, GD_KT, trap_irq_clock,    0);
+    idt[IRQ_OFFSET + IRQ_KBD]      = GATE(0, GD_KT, trap_irq_kbd,      0);
+    idt[IRQ_OFFSET + IRQ_IDE]      = GATE(0, GD_KT, trap_irq_ide,      0);
+    idt[IRQ_OFFSET + IRQ_ERROR]    = GATE(0, GD_KT, trap_irq_error,    0);
+#endif
+
+    /* Setup #PF handler dedicated stack */
     idt[T_PGFLT].gd_ist = 1;
 
     /* Per-CPU setup */
@@ -229,6 +294,7 @@ trap_dispatch(struct Trapframe *tf) {
         return;
     case T_BRKPT:
         // LAB 8: Your code here.
+        monitor(tf);
         return;
     case IRQ_OFFSET + IRQ_SPURIOUS:
         /* Handle spurious interrupts
@@ -239,14 +305,13 @@ trap_dispatch(struct Trapframe *tf) {
             print_trapframe(tf);
         }
         return;
-    case IRQ_OFFSET + IRQ_CLOCK:
     case IRQ_OFFSET + IRQ_TIMER:
-        // LAB 5: Your code here
-        timer_for_schedule->handle_interrupts();
+        hpet_handle_interrupts_tim0();
+        return;
+    case IRQ_OFFSET + IRQ_CLOCK:
         // LAB 4: Your code here
-        rtc_check_status();
-        pic_send_eoi(IRQ_CLOCK);
-        sched_yield();
+        // LAB 5: Your code here
+        hpet_handle_interrupts_tim1();
         return;
     default:
         print_trapframe(tf);
@@ -285,6 +350,7 @@ trap(struct Trapframe *tf) {
         in_page_fault = 1;
 
         uintptr_t va = rcr2();
+        uintptr_t va_page = ROUNDDOWN(va, PAGE_SIZE);
 
 #if defined(SANITIZE_USER_SHADOW_BASE) && LAB == 8
         /* NOTE: Hack!
@@ -307,7 +373,7 @@ trap(struct Trapframe *tf) {
         int res = force_alloc_page(current_space, va, MAX_ALLOCATION_CLASS);
         if (trace_pagefaults) {
             bool can_redir = false;
-            cprintf("<%p> Page fault ip=%08lX va=%08lX err=%c%c%c%c%c -> %s\n", current_space, tf->tf_rip, va,
+            cprintf("<%p> Page fault ip=%08lX va=%08lX err=%c%c%c%c%c -> %s\n", current_space, tf->tf_rip, va_page,
                     tf->tf_err & FEC_P ? 'P' : '-',
                     tf->tf_err & FEC_U ? 'U' : '-',
                     tf->tf_err & FEC_W ? 'W' : '-',

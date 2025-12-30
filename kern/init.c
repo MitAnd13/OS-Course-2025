@@ -156,7 +156,6 @@ i386_init(void) {
 
     /* Choose the timer used for scheduling: hpet or pit */
     timers_schedule("hpet0");
-
 #ifdef CONFIG_KSPACE
     /* Touch all you want */
     ENV_CREATE_KERNEL_TYPE(prog_test1);
@@ -181,6 +180,7 @@ i386_init(void) {
 #endif
 
     /* Schedule and run the first user environment! */
+        //assert(false);
     sched_yield();
 }
 

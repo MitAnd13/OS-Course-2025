@@ -18,6 +18,7 @@ entry:
     movq %rcx, uefi_lp(%rip)
 
     # Invoke C code
+    cli
     call i386_init
     # Should never reach this place
     jmp .
@@ -45,7 +46,6 @@ save_trapframe_syscall:
     # fallthrough
 
 save_trapframe:
-    cli
     orl $FL_IF, saved_rflags(%rip)
 
     # We already pushed ss,rsp,rflags,cs,rip
@@ -74,13 +74,12 @@ sys_yield:
 # LAB 3: Your code here:
 .globl sys_exit
 .type  sys_exit, @function
+
 sys_exit:
-cli
-    leaq bootstacktop(%rip),%rsp //reset stack to the entry state
+    cli
+    leaq bootstacktop(%rip),%rsp
     xor %ebp, %ebp
     call csys_exit
-    jmp .
-
 #endif
 
 

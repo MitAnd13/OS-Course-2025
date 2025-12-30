@@ -20,6 +20,7 @@
 
 #define WHITESPACE "\t\r\n "
 #define MAXARGS    16
+#define CALL_INSN_LEN 5
 
 /* Functions implementing monitor commands */
 int mon_help(int argc, char **argv, struct Trapframe *tf);
@@ -32,7 +33,6 @@ int mon_frequency(int argc, char **argv, struct Trapframe *tf);
 int mon_memory(int argc, char **argv, struct Trapframe *tf);
 int mon_pagetable(int argc, char **argv, struct Trapframe *tf);
 int mon_virt(int argc, char **argv, struct Trapframe *tf);
-int mon_who_print(int argc, char **argv, struct Trapframe *tf);
 
 struct Command {
     const char *name;
@@ -52,8 +52,7 @@ static struct Command commands[] = {
         {"memory", "Display allocated memory pages", mon_memory},
         {"pagetable", "Display current page table", mon_pagetable},
         {"virt", "Display virtual memory tree", mon_virt},
-        {"who?", "You won't shut down the real...", mon_who_print}
-    };
+};
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
 
 /* Implementations of basic kernel monitor commands */
@@ -79,32 +78,63 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf) {
     return 0;
 }
 
-int
-mon_who_print(int argc, char **argv, struct Trapframe *tf) {
-    cprintf("NEPSTER\n");
+
+static inline int
+rbp_in_range(uint64_t rbp, uint64_t lo, uint64_t hi) {
+    if (rbp < lo) return 0;
+    if (hi < 16) return 0;
+    return rbp <= hi - 16;
+}
+
+static inline int
+rbp_valid(uint64_t rbp) {
+    if (rbp == 0) return 0;
+    if (rbp & 7) return 0;
+    if (rbp_in_range(rbp, KERN_STACK_TOP - KERN_STACK_SIZE, KERN_STACK_TOP)) return 1;
+    if (rbp_in_range(rbp, KERN_PF_STACK_TOP - KERN_PF_STACK_SIZE, KERN_PF_STACK_TOP)) return 1;
     return 0;
 }
 
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
-    // LAB 2: Your code here
-    uint64_t rbp = read_rbp();
-    uint64_t rip = (uint64_t) * ((uint64_t *)rbp + 1);
-    cprintf("Stack backtrace:\n");
-    int res;
-    struct Ripdebuginfo debug_info;
+    (void)argc; (void)argv; (void)tf;
 
-    while (rbp != 0) {
-        cprintf("  rbp %016lx  rip %016lx\n", rbp, rip);
-        res = debuginfo_rip((uintptr_t)rip, (struct Ripdebuginfo *)&debug_info);
-        if (!res) {
-            cprintf("    %.*s:%d: %.*s+%lu\n", RIPDEBUG_BUFSIZ, debug_info.rip_file, debug_info.rip_line, RIPDEBUG_BUFSIZ, debug_info.rip_fn_name, rip - debug_info.rip_fn_addr);
-        } else {
-            cprintf("    not complete info is given\n");
+    cprintf("Stack backtrace:\n");
+
+    uint64_t rbp = read_rbp();
+    const int max_frames = 64;
+
+    for (int depth = 0; depth < max_frames; depth++) {
+        if (!rbp_valid(rbp)) {
+            cprintf("  backtrace stopped: invalid rbp %016lx\n", rbp);
+            break;
         }
-        rbp = (uint64_t) * (uint64_t *)rbp;
-        rip = (uint64_t) * ((uint64_t *)rbp + 1);
+
+        uint64_t *frame = (uint64_t *)rbp;
+        uint64_t next_rbp = frame[0];
+        uint64_t rip      = frame[1];
+
+        cprintf("  rbp %016lx  rip %016lx\n", rbp, rip);
+
+        struct Ripdebuginfo info;
+        if (debuginfo_rip(rip, &info) == 0) {
+            uint64_t call_site = (rip >= CALL_INSN_LEN) ? (rip - CALL_INSN_LEN) : rip;
+            uint64_t off = (info.rip_fn_addr && call_site >= info.rip_fn_addr)
+                         ? (call_site - info.rip_fn_addr) : 0;
+            cprintf("    %s:%d: %.*s+%lu\n",
+                    info.rip_file, info.rip_line,
+                    info.rip_fn_namelen, info.rip_fn_name,
+                    (unsigned long)off);
+        } else {
+            cprintf("    <no debug info>\n");
+        }
+
+        if (next_rbp == 0) break;
+        if (next_rbp <= rbp) break;
+
+        rbp = next_rbp;
     }
+
     return 0;
 }
 
@@ -113,9 +143,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
 
 int
 mon_start(int argc, char **argv, struct Trapframe *tf) {
-    if (argc != 2) {
-        return 1;
-    } 
+    if (argc < 2) { cprintf("usage: timer_start <pit|hpet0|hpet1|pm>\n"); return 0; }
     timer_start(argv[1]);
     return 0;
 }
@@ -128,9 +156,7 @@ mon_stop(int argc, char **argv, struct Trapframe *tf) {
 
 int
 mon_frequency(int argc, char **argv, struct Trapframe *tf) {
-    if (argc != 2) {
-        return 1;
-    }
+    if (argc < 2) { cprintf("usage: timer_freq <pit|hpet0|hpet1|pm>\n"); return 0; }
     timer_cpu_frequency(argv[1]);
     return 0;
 }
@@ -148,35 +174,51 @@ mon_memory(int argc, char **argv, struct Trapframe *tf) {
 int
 mon_pagetable(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
-    dump_page_table(current_space->pml4);
+    (void)argc;
+    (void)argv;
+    (void)tf;
+
+    dump_page_table(kspace.pml4);
     return 0;
 }
 
 int
 mon_virt(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
-    dump_virtual_tree(current_space->root, current_space->root->class);
+    (void)argc;
+    (void)argv;
+    (void)tf;
+
+    dump_virtual_tree(kspace.root, MAX_CLASS);
     return 0;
 }
 
 // LAB 4: Your code here
 int
-mon_dumpcmos(int argc, char **argv, struct Trapframe *tf) {
-    // Dump CMOS memory in the following format:
+mon_dumpcmos(int argc, char **argv, struct Trapframe *tf)
+{
+        // Dump CMOS memory in the following format:
     // 00: 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
     // 10: 00 ..
     // Make sure you understand the values read.
     // Hint: Use cmos_read8()/cmos_write8() functions.
     // LAB 4: Your code here
-    uint8_t i;
-    cprintf("00: ");
-    for (i = 0; i < CMOS_SIZE; i++) {
-        if (i % 16 == 0 && i > 0) {
-            cprintf("\n%02X: ", i);
-        }
-        cprintf("%02X ", cmos_read8(i));
+// LAB 4: Your code here
+    const int n = 0x80; // 128 bytes: 0x00..0x7F
+
+    for (int off = 0; off < n; off++) {
+        if ((off & 0x0F) == 0)
+            cprintf("%02x: ", off);                
+
+        cprintf("%02x ", cmos_read8(CMOS_START + off));
+
+        if ((off & 0x0F) == 0x0F)
+            cprintf("\n");
     }
-    cprintf("\n");
+
+    if ((n & 0x0F) != 0)
+        cprintf("\n");
+
     return 0;
 }
 

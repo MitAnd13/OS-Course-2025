@@ -53,6 +53,21 @@ load_user_dwarf_info(struct Dwarf_Addrs *addrs) {
 
     /* Load debug sections from curenv->binary elf image */
     // LAB 8: Your code here
+    struct Elf *eh = (struct Elf *)binary;
+    struct Secthdr *sh = (struct Secthdr *)(binary + eh->e_shoff);
+    const char *shstr = (const char *)(binary + sh[eh->e_shstrndx].sh_offset);
+
+    for (UINT16 i = 0; i < eh->e_shnum; i++) {
+        const char *sname = shstr + sh[i].sh_name;
+        for (size_t j = 0; j < sizeof(sections) / sizeof(sections[0]); j++) {
+            if (strcmp(sname, sections[j].name) == 0) {
+                const uint8_t *begin = binary + sh[i].sh_offset;
+                const uint8_t *end   = begin + sh[i].sh_size;
+                *sections[j].start = begin;
+                *sections[j].end   = end;
+            }
+        }
+    }
     (void)sections;
 }
 
@@ -82,6 +97,7 @@ debuginfo_rip(uintptr_t addr, struct Ripdebuginfo *info) {
      * Make sure that you fully understand why it is necessary. */
 
     // LAB 8: Your code here:
+    struct AddressSpace *old_space = switch_address_space(&kspace);
 
     /* Load dwarf section pointers from either
      * currently running program binary or use
@@ -92,10 +108,54 @@ debuginfo_rip(uintptr_t addr, struct Ripdebuginfo *info) {
     // LAB 8: Your code here:
 
     struct Dwarf_Addrs addrs;
-    load_kernel_dwarf_info(&addrs);
+    int res = 0;
+    if (addr < MAX_USER_ADDRESS && curenv) {
+        load_user_dwarf_info(&addrs);
+
+        if (addrs.info_begin && addrs.info_end) {
+            if (addrs.info_end < addrs.info_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.info_begin, (size_t)(addrs.info_end - addrs.info_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+        if (addrs.abbrev_begin && addrs.abbrev_end) {
+            if (addrs.abbrev_end < addrs.abbrev_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.abbrev_begin, (size_t)(addrs.abbrev_end - addrs.abbrev_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+        if (addrs.line_begin && addrs.line_end) {
+            if (addrs.line_end < addrs.line_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.line_begin, (size_t)(addrs.line_end - addrs.line_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+        if (addrs.str_begin && addrs.str_end) {
+            if (addrs.str_end < addrs.str_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.str_begin, (size_t)(addrs.str_end - addrs.str_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+
+        if (addrs.aranges_begin && addrs.aranges_end) {
+            if (addrs.aranges_end < addrs.aranges_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.aranges_begin, (size_t)(addrs.aranges_end - addrs.aranges_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+        if (addrs.pubnames_begin && addrs.pubnames_end) {
+            if (addrs.pubnames_end < addrs.pubnames_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.pubnames_begin, (size_t)(addrs.pubnames_end - addrs.pubnames_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+        if (addrs.pubtypes_begin && addrs.pubtypes_end) {
+            if (addrs.pubtypes_end < addrs.pubtypes_begin) { res = -1; goto error; }
+            res = user_mem_check(curenv, addrs.pubtypes_begin, (size_t)(addrs.pubtypes_end - addrs.pubtypes_begin), PROT_R);
+            if (res < 0) goto error;
+        }
+
+    } else {
+        load_kernel_dwarf_info(&addrs);
+    }
+
 
     Dwarf_Off offset = 0, line_offset = 0;
-    int res = info_by_address(&addrs, addr, &offset);
+    res = info_by_address(&addrs, addr, &offset);
     if (res < 0) goto error;
 
     char *tmp_buf = NULL;
@@ -109,9 +169,8 @@ debuginfo_rip(uintptr_t addr, struct Ripdebuginfo *info) {
      * Hint: use line_for_address from kern/dwarf_lines.c */
 
     // LAB 2: Your res here:
-    res = line_for_address(&addrs, addr - 5, line_offset, &(info->rip_line));
+    res = line_for_address(&addrs, addr - 5, line_offset, &info->rip_line);
     if (res < 0) goto error;
-
     /* Find function name corresponding to given address.
      * Hint: note that we need the address of `call` instruction, but rip holds
      * address of the next instruction, so we should substract CALL_INSN_LEN from it.
@@ -120,14 +179,13 @@ debuginfo_rip(uintptr_t addr, struct Ripdebuginfo *info) {
      * string returned by function_by_info will always be */
 
     // LAB 2: Your res here:
-
-    uint64_t new_func_addr = 0;
-    res = function_by_info(&addrs, addr - CALL_INSN_LEN, offset, &tmp_buf, &new_func_addr);
-    strncpy(info->rip_fn_name, tmp_buf, sizeof(info->rip_fn_name));
-    info->rip_fn_addr = new_func_addr;
+    res = function_by_info(&addrs, addr - CALL_INSN_LEN, offset, &tmp_buf, &info->rip_fn_addr);
     if (res < 0) goto error;
+    strncpy(info->rip_fn_name, tmp_buf, sizeof(info->rip_fn_name) / sizeof(info->rip_fn_name[0]));
+    info->rip_fn_namelen = strnlen(info->rip_fn_name, sizeof(info->rip_fn_name) / sizeof(info->rip_fn_name[0]));
 
 error:
+    switch_address_space(old_space);
     return res;
 }
 
@@ -140,21 +198,28 @@ find_function(const char *const fname) {
      * in assembly. */
 
     // LAB 3: Your code here:
-    if (!strncmp(fname, "sys_exit", 256)) {
-        return (uintptr_t)sys_exit;
+    struct {
+    const char *name;
+    uintptr_t addr;
+    } scentry[] = {
+#ifdef CONFIG_KSPACE
+        { "sys_yield", (uintptr_t)sys_yield },
+        { "sys_exit",  (uintptr_t)sys_exit },
+#endif
+    };
+    for (size_t i = 0; i < sizeof(scentry)/sizeof(*scentry); i++) {
+        if (!strcmp(scentry[i].name, fname)) {
+        return scentry[i].addr;
+        }
     }
-    if (!strncmp(fname, "sys_yield", 256)) {
-        return (uintptr_t)sys_yield;
-    }
-
     struct Dwarf_Addrs addrs;
     load_kernel_dwarf_info(&addrs);
     uintptr_t offset = 0;
-    if (!address_by_fname(&addrs, fname, &offset)) {
-        if (offset) {
-            return offset;
-        }
+
+    if (!address_by_fname(&addrs, fname, &offset) && offset) {
+        return offset;
     }
+
     if (!naive_address_by_fname(&addrs, fname, &offset)) {
         return offset;
     }
