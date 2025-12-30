@@ -297,6 +297,7 @@ trap_dispatch(struct Trapframe *tf) {
     case T_PGFLT:
         /* Handle processor exceptions. */
         // LAB 9: Your code here.
+        page_fault_handler(tf);
         return;
     case T_BRKPT:
         // LAB 8: Your code here.
@@ -313,6 +314,11 @@ trap_dispatch(struct Trapframe *tf) {
         return;
     case IRQ_OFFSET + IRQ_TIMER:
         hpet_handle_interrupts_tim0();
+        
+        if (curenv && curenv->env_status == ENV_RUNNING)
+            curenv->env_status = ENV_RUNNABLE;
+        
+        sched_yield();
         return;
     case IRQ_OFFSET + IRQ_CLOCK:
         // LAB 4: Your code here
@@ -356,7 +362,6 @@ trap(struct Trapframe *tf) {
         in_page_fault = 1;
 
         uintptr_t va = rcr2();
-        uintptr_t va_page = ROUNDDOWN(va, PAGE_SIZE);
 
 #if defined(SANITIZE_USER_SHADOW_BASE) && LAB == 8
         /* NOTE: Hack!
@@ -421,7 +426,7 @@ trap(struct Trapframe *tf) {
 static _Noreturn void
 page_fault_handler(struct Trapframe *tf) {
     uintptr_t cr2 = rcr2();
-    (void)cr2;
+    uintptr_t fault_va = cr2;
 
     /* Handle kernel-mode page faults. */
     if (!(tf->tf_err & FEC_U)) {
@@ -463,30 +468,64 @@ page_fault_handler(struct Trapframe *tf) {
 
     static_assert(UTRAP_RIP == offsetof(struct UTrapframe, utf_rip), "UTRAP_RIP should be equal to RIP offset");
     static_assert(UTRAP_RSP == offsetof(struct UTrapframe, utf_rsp), "UTRAP_RSP should be equal to RSP offset");
+    if (!curenv->env_pgfault_upcall) {
+        cprintf("[%08x] user fault va %p ip %p\n",
+                curenv->env_id, (void *)fault_va, (void *)tf->tf_rip);
+        print_trapframe(tf);
+        env_destroy(curenv);
+        while (1) ;
+    }
 
-    /* Force allocation of exception stack page to prevent memcpy from
-     * causing pagefault during another pagefault */
-    // LAB 9: Your code here:
+    uintptr_t ux_top = USER_EXCEPTION_STACK_TOP;
+    uintptr_t ux_bot = USER_EXCEPTION_STACK_TOP - USER_EXCEPTION_STACK_SIZE;
 
-    /* Force allocate exception stack page to prevent memcpy from
-     * causing pagefault during another pagefault */
-    // LAB 9: Your code here:
+    uintptr_t utf_addr;
+    if (tf->tf_rsp >= ux_bot && tf->tf_rsp < ux_top) {
+        utf_addr = tf->tf_rsp - sizeof(struct UTrapframe) - sizeof(uint64_t);
+    } else {
+        utf_addr = ux_top - sizeof(struct UTrapframe);
+    }
 
-    /* Assert existance of exception stack */
-    // LAB 9: Your code here:
+    if (user_mem_check(curenv, (void *)utf_addr, sizeof(struct UTrapframe),
+                       PROT_W | PROT_USER_) < 0) {
 
-    /* Build local copy of UTrapframe */
-    // LAB 9: Your code here:
+        char errstr[6];
+        errstr[0] = (tf->tf_err & FEC_P) ? 'P' : '-';
+        errstr[1] = (tf->tf_err & FEC_U) ? 'U' : '-';
+        errstr[2] = (tf->tf_err & FEC_W) ? 'W' : '-';
+        errstr[3] = '-';
+        errstr[4] = '-';
+        errstr[5] = '\0';
 
-    /* And then copy it userspace (nosan_memcpy()) */
-    // LAB 9: Your code here:
 
-    /* Reset in_page_fault flag */
-    // LAB 9: Your code here:
+        cprintf("<%p> Page fault ip=%08lX va=%08lX err=%s -> fault\n",
+                tf, tf->tf_rip, fault_va, errstr);
 
-    /* Rerun current environment */
-    // LAB 9: Your code here:
 
-    while (1)
-        ;
+        user_mem_assert(curenv, (void *)utf_addr, sizeof(struct UTrapframe),
+                        PROT_W | PROT_USER_);
+    }
+
+
+    user_mem_assert(curenv, (void *)utf_addr, sizeof(struct UTrapframe), PROT_W | PROT_USER_);
+    force_alloc_page(current_space, utf_addr, MAX_ALLOCATION_CLASS);
+    force_alloc_page(current_space, utf_addr + sizeof(struct UTrapframe) - 1, MAX_ALLOCATION_CLASS);
+
+    struct UTrapframe utf;
+    utf.utf_fault_va = fault_va;
+    utf.utf_err      = tf->tf_err;
+    utf.utf_regs     = tf->tf_regs;
+    utf.utf_rip      = tf->tf_rip;
+    utf.utf_rflags   = tf->tf_rflags;
+    utf.utf_rsp      = tf->tf_rsp;
+
+    nosan_memcpy((void *)utf_addr, &utf, sizeof(utf));
+
+    tf->tf_rsp = utf_addr;
+    tf->tf_rip = (uintptr_t)curenv->env_pgfault_upcall;
+
+    in_page_fault = 0;
+
+    env_run(curenv);
+    while (1);
 }

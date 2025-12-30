@@ -66,17 +66,23 @@ _pgfault_upcall:
 
     # LAB 9: Your code here
 
-    # Restore the trap-time registers.  After you do this, you
-    # can no longer modify any general-purpose registers (use POPA macro).
-    # LAB 9: Your code here
+    # 1 Push trap-time %rip onto the trap-time stack (and update utf_rsp to the adjusted value)
+    movq    UTRAP_RSP(%rsp), %rax        # %rax = utf_rsp (trap-time RSP)
+    movq    UTRAP_RIP(%rsp), %rcx        # %rcx = utf_rip (trap-time RIP)
+    subq    $8, %rax                     # make room for return address on trap-time stack
+    movq    %rcx, (%rax)                 # *(utf_rsp - 8) = utf_rip
+    movq    %rax, UTRAP_RSP(%rsp)        # utf_rsp = utf_rsp - 8 (save adjusted trap-time RSP)
 
-    # Restore rflags from the stack.  After you do this, you can
-    # no longer use arithmetic operations or anything else that
-    # modifies rflags.
-    # LAB 9: Your code here
+    # 2 Restore trap-time registers (POPA expects %rsp to point to utf_regs)
+    leaq    16(%rsp), %rsp               # skip utf_fault_va + utf_err -> now %rsp points to utf_regs
+    POPA                                   # restores r15..rax; after this %rsp points to utf_rip
 
-    # Switch back to the adjusted trap-time stack.
-    # LAB 9: Your code here
+    # 3 Restore rflags (utf_rflags is 8 bytes above utf_rip)
+    pushq   8(%rsp)                      # push utf_rflags
+    popfq                                # restore RFLAGS, no further flag-clobbering ops
+
+    # 4 Switch back to the adjusted trap-time stack (utf_rsp is 16 bytes above utf_rip)
+    movq    16(%rsp), %rsp               # %rsp = adjusted utf_rsp (trap-time stack with rip already pushed)
 
     # Return to re-execute the instruction that faulted.
     ret

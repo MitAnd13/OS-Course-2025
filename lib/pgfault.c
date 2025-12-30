@@ -36,18 +36,29 @@ _handle_vectored_pagefault(struct UTrapframe *utf) {
  * allocate an exception stack (one page of memory with its top
  * at USER_EXCEPTION_STACK_TOP), and tell the kernel to call the assembly-language
  * _pgfault_upcall routine when a page fault occurs. */
+
 int
 add_pgfault_handler(pf_handler_t handler) {
     int res = 0;
+
     if (!_pfhandler_inititiallized) {
-        /* First time through! */
-        // LAB 9: Your code here:
-        goto end;
+        void *uxstack_bottom =
+            (void *)(uintptr_t)(USER_EXCEPTION_STACK_TOP - USER_EXCEPTION_STACK_SIZE);
+
+        res = sys_alloc_region(0, uxstack_bottom,
+                               USER_EXCEPTION_STACK_SIZE,
+                               PROT_R | PROT_W);
+        if (res < 0) goto end;
+
+        res = sys_env_set_pgfault_upcall(0, _pgfault_upcall);
+        if (res < 0) goto end;
+
         _pfhandler_inititiallized = 1;
     }
 
     for (size_t i = 0; i < _pfhandler_off; i++)
-        if (handler == _pfhandler_vec[i]) return 0;
+        if (handler == _pfhandler_vec[i])
+            return 0;
 
     if (_pfhandler_off == MAX_PFHANDLER)
         res = -E_INVAL;
@@ -55,9 +66,11 @@ add_pgfault_handler(pf_handler_t handler) {
         _pfhandler_vec[_pfhandler_off++] = handler;
 
 end:
-    if (res < 0) panic("set_pgfault_handler: %i", res);
+    if (res < 0)
+        panic("set_pgfault_handler: %i", res);
     return res;
 }
+
 
 void
 remove_pgfault_handler(pf_handler_t handler) {

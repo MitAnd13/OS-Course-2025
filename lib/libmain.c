@@ -12,6 +12,7 @@ const char *binaryname = "<unknown>";
 #ifdef JOS_PROG
 void (*volatile sys_exit)(void);
 #endif
+extern void _pgfault_upcall(void);
 
 void
 libmain(int argc, char **argv) {
@@ -23,6 +24,9 @@ libmain(int argc, char **argv) {
 
     /* Set thisenv to point at our Env structure in envs[]. */
 
+    int r = sys_env_set_pgfault_upcall(0, _pgfault_upcall);
+    if (r < 0)
+        panic("sys_env_set_pgfault_upcall: %d", r);
     // LAB 8: Your code here
     envid_t id = sys_getenvid();
     thisenv = &envs[ENVX(id)];
