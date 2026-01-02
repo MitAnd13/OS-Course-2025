@@ -1,3 +1,4 @@
+#include "trap.h"
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
@@ -180,6 +181,8 @@ trap_init(void) {
     idt[T_PGFLT].gd_ist = 1;
 
     // LAB 11: Your code here
+    idt[IRQ_OFFSET + IRQ_KBD] = GATE(0, GD_KT, trap_irq_kbd, 0);
+    idt[IRQ_OFFSET + IRQ_SERIAL] = GATE(0, GD_KT, trap_irq_serial, 0);
 
     /* Per-CPU setup */
     trap_init_percpu();
@@ -330,6 +333,16 @@ trap_dispatch(struct Trapframe *tf) {
         // LAB 11: Your code here
         /* Handle keyboard (IRQ_KBD + kbd_intr()) and
          * serial (IRQ_SERIAL + serial_intr()) interrupts. */
+    case IRQ_OFFSET + IRQ_SERIAL:
+        serial_intr();
+        pic_send_eoi(IRQ_SERIAL);
+        return;
+    case IRQ_OFFSET + IRQ_KBD:
+        kbd_intr();
+        pic_send_eoi(IRQ_KBD);
+        return;
+    
+    
     default:
         print_trapframe(tf);
         if (!(tf->tf_cs & 3))

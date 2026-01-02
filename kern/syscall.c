@@ -403,6 +403,20 @@ sys_ipc_try_send(envid_t envid, uint32_t value, uintptr_t srcva, size_t size, in
 static int
 sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize) {
     // LAB 9: Your code here
+    if (dstva < MAX_USER_ADDRESS && (ROUNDDOWN(dstva, PAGE_SIZE) != dstva || maxsize == 0 || ROUNDDOWN(maxsize, PAGE_SIZE) != maxsize))
+        return -E_INVAL;
+
+    struct Env *env = NULL;
+    int res = 0;
+    res = envid2env(0, &env, 0);
+    if (res < 0 || env == NULL) {
+        return -E_BAD_ENV;
+    }
+    env->env_ipc_dstva = dstva;
+    env->env_ipc_maxsz = maxsize;
+    env->env_status = ENV_NOT_RUNNABLE;
+    env->env_ipc_from = 0;
+    env->env_ipc_recving = 1;
 
     return 0;
 }
@@ -420,7 +434,20 @@ sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize) {
 static int
 sys_env_set_trapframe(envid_t envid, struct Trapframe *tf) {
     // LAB 11: Your code here
+    struct Env* env = NULL;
+    if (envid2env(envid, &env, 0))
+        return -E_BAD_ENV;
 
+    user_mem_assert(env, tf, sizeof(*tf), PROT_R);
+
+    // nosan_memcpy(&env->env_tf, tf, sizeof(*tf));
+    nosan_memcpy(&env->env_tf, tf, sizeof(*tf));
+    env->env_tf.tf_ds = GD_UD | 3;
+    env->env_tf.tf_es = GD_UD | 3;
+    env->env_tf.tf_ss = GD_UD | 3;
+    env->env_tf.tf_cs = GD_UT | 3;
+    env->env_tf.tf_rflags &= 0xFFF;
+    env->env_tf.tf_rflags |= FL_IF;
     return 0;
 }
 
@@ -484,6 +511,8 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
             return sys_map_physical_region(a1, (envid_t)a2, a3, (size_t)a4, (int)a5);
         case SYS_region_refs:
             return sys_region_refs(a1, (size_t)a2, a3, (size_t)a4);
+        case SYS_env_set_trapframe:
+            return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
     }
 
     return -E_NO_SYS;
