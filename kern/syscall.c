@@ -4,6 +4,7 @@
 #include <inc/error.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/futex.h>
 
 #include <kern/console.h>
 #include <kern/env.h>
@@ -524,6 +525,12 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
         case SYS_gettime:
             return sys_gettime();
+        case SYS_FUTEX_WAIT: 
+            return sys_futex_wait(a1, a2);
+        case SYS_FUTEX_WAKE: 
+            return sys_futex_wake(a1, a2);
+        case SYS_SET_ROBUST_LIST: 
+            return sys_set_robust_list(a1, a2);
     }
 
     return -E_NO_SYS;

@@ -20,6 +20,11 @@ enum {
     SYS_ipc_try_send,
     SYS_ipc_recv,
     SYS_gettime,
+
+    SYS_FUTEX_WAIT,
+    SYS_FUTEX_WAKE,
+    SYS_SET_ROBUST_LIST,
+    
     NSYSCALLS
 };
 

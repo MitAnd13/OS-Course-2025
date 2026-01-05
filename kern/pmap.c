@@ -6,6 +6,7 @@
 #include <inc/string.h>
 #include <inc/uefi.h>
 #include <inc/x86.h>
+#include <inc/futex.h>
 
 #include <kern/env.h>
 #include <kern/kclock.h>
@@ -1055,6 +1056,9 @@ unmap_page(struct AddressSpace *spc, uintptr_t addr, int class) {
     assert(0);
 
 finish:
+    if (spc->pml4[pml4i0] & PTE_SHARE) {
+        sys_futex_wake(addr, 2147483647);  // Wake all on unmap
+    }
     tlb_invalidate_range(spc, inval_start, inval_end);
 }
 

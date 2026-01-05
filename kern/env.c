@@ -8,6 +8,7 @@
 #include <inc/elf.h>
 #include <inc/vsyscall.h>
 #include <inc/dwarf.h>
+#include <inc/futex.h>
 
 #include <kern/env.h>
 #include <kern/kdebug.h>
@@ -505,6 +506,10 @@ env_destroy(struct Env *env) {
     // LAB 8: Your code here
     
     in_page_fault = false;
+
+    // Handle futex death: Wake waiters on robust futexes before full destroy
+    futex_handle_death(env);
+
     if (env == curenv || env->env_status != ENV_RUNNING) {
         env_free(env);
         if (env == curenv) {
@@ -609,4 +614,13 @@ env_run(struct Env *env) {
     env_pop_tf(&curenv->env_tf);
 
     while (1);
+}
+
+void env_block(struct Env *e) { 
+    e->env_status = ENV_NOT_RUNNABLE; 
+    sched_yield(); 
+}
+
+void env_unblock(struct Env *e) { 
+    e->env_status = ENV_RUNNABLE; 
 }

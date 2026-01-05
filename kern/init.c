@@ -5,6 +5,7 @@
 #include <inc/assert.h>
 #include <inc/uefi.h>
 #include <inc/memlayout.h>
+#include <inc/futex.h>
 
 #include <kern/monitor.h>
 #include <kern/tsc.h>
@@ -154,6 +155,7 @@ i386_init(void) {
     /* User environment initialization functions */
     env_init();
 
+    futex_init();
     /* Choose the timer used for scheduling: hpet or pit */
     timers_schedule("hpet0");
 #ifdef CONFIG_KSPACE
