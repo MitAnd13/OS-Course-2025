@@ -152,7 +152,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
         return -E_NO_FREE_ENV;
 
     /* Allocate and set up the page directory for this environment. */
-    int res = init_address_space(&env->address_space);
+    int res = init_address_space(env->address_space);
     if (res < 0) return res;
 
     /* Generate an env_id for this environment */
@@ -405,7 +405,7 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
             uint32_t prog_flags = ph->p_flags; 
             cprintf("load_icode - prog_flags: 0x%x \n", prog_flags);
             
-            if ((res = map_region(&env->address_space, ph->p_va, &kspace, ph->p_va, 
+            if ((res = map_region(env->address_space, ph->p_va, &kspace, ph->p_va, 
                 ph->p_memsz, prog_flags | PROT_USER_)) < 0) 
                 panic("load_icode - map prog to env->address_space: %i \n", res);
         }
@@ -417,7 +417,7 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
     if (image_start == UINTPTR_MAX || image_end == 0) {
         return -E_INVALID_EXE;
     }
-    if ((res = map_region(&env->address_space, USER_STACK_TOP - USER_STACK_SIZE, NULL, 0, USER_STACK_SIZE, PROT_R | PROT_W | PROT_USER_ | ALLOC_ZERO)) < 0) 
+    if ((res = map_region(env->address_space, USER_STACK_TOP - USER_STACK_SIZE, NULL, 0, USER_STACK_SIZE, PROT_R | PROT_W | PROT_USER_ | ALLOC_ZERO)) < 0) 
         panic("load_icode: %i \n", res);
 
     /* NOTE: When merging origin/lab10 put this hunk at the end
@@ -425,7 +425,7 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
     if (env->env_type == ENV_TYPE_FS) {
         /* If we are about to start filesystem server we need to pass
          * information about PCIe MMIO region to it. */
-        struct AddressSpace *as = switch_address_space(&env->address_space);
+        struct AddressSpace *as = switch_address_space(env->address_space);
         env->env_tf.tf_rsp = make_fs_args((char *)env->env_tf.tf_rsp);
         switch_address_space(as);
     }
@@ -472,11 +472,11 @@ env_free(struct Env *env) {
     /* If freeing the current environment, switch to kern_pgdir
      * before freeing the page directory, just in case the page
      * gets reused. */
-    if (&env->address_space == current_space)
+    if (env->address_space == current_space)
         switch_address_space(&kspace);
 
     static_assert(MAX_USER_ADDRESS % HUGE_PAGE_SIZE == 0, "Misaligned MAX_USER_ADDRESS");
-    release_address_space(&env->address_space);
+    release_address_space(env->address_space);
 #endif
 
     /* Return the environment to the free list */
@@ -604,7 +604,7 @@ env_run(struct Env *env) {
         curenv = env;
         curenv->env_status = ENV_RUNNING;
         ++curenv->env_runs;
-        switch_address_space(&curenv->address_space);
+        switch_address_space(curenv->address_space);
     }
     env_pop_tf(&curenv->env_tf);
 

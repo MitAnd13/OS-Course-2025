@@ -832,8 +832,8 @@ propagate_pml4(struct AddressSpace *spc) {
 
     if (spc != &kspace) propagate_one_pml4(&kspace, spc);
     for (size_t i = 0; i < NENV; i++) {
-        if (envs[i].env_status != ENV_FREE && &envs[i].address_space != spc)
-            propagate_one_pml4(&envs[i].address_space, spc);
+        if (envs[i].env_status != ENV_FREE && envs[i].address_space != spc)
+            propagate_one_pml4(envs[i].address_space, spc);
     }
 }
 
@@ -2196,7 +2196,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm) {
         uintptr_t page = addr & ~CLASS_MASK(0);
 
         struct Page *node =
-            page_lookup_virtual(env->address_space.root, page, 0, LOOKUP_PRESERVE);
+            page_lookup_virtual(env->address_space->root, page, 0, LOOKUP_PRESERVE);
 
         if (!node || !node->phy) {
             user_mem_check_addr = addr;

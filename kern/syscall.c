@@ -200,7 +200,7 @@ sys_alloc_region(envid_t envid, uintptr_t addr, size_t size, int perm) {
     if (reg == NULL)
         return -E_NO_MEM;
 
-    res = map_region(&env->address_space, addr, current_space, (uintptr_t)reg, size, perm | PROT_LAZY | PROT_USER_);
+    res = map_region(env->address_space, addr, current_space, (uintptr_t)reg, size, perm | PROT_LAZY | PROT_USER_);
 
     return res;
 
@@ -248,7 +248,7 @@ sys_map_region(envid_t srcenvid, uintptr_t srcva,
     }
 
     perm = perm | PROT_USER_;
-    int res = map_region(&dstenv->address_space, dstva, &srcenv->address_space, srcva, size, perm);
+    int res = map_region(dstenv->address_space, dstva, srcenv->address_space, srcva, size, perm);
     return res ? -E_NO_MEM : 0;
     return 0;
 }
@@ -270,7 +270,7 @@ sys_unmap_region(envid_t envid, uintptr_t va, size_t size) {
         return -E_BAD_ENV;
     if (CLASS_MASK(0) & va || va > MAX_USER_ADDRESS)
         return -E_INVAL;
-    unmap_region(&env->address_space, va, size);
+    unmap_region(env->address_space, va, size);
     return 0;
 }
 
@@ -299,7 +299,7 @@ sys_map_physical_region(uintptr_t pa, envid_t envid, uintptr_t va, size_t size, 
         || perm & (PROT_SHARE | PROT_COMBINE | PROT_LAZY) || size > MAX_USER_ADDRESS || MAX_USER_ADDRESS - va < size)
         return -E_INVAL;
 
-    return map_physical_region(&env->address_space, va, pa, size, perm | PROT_USER_ | MAP_USER_MMIO);
+    return map_physical_region(env->address_space, va, pa, size, perm | PROT_USER_ | MAP_USER_MMIO);
 
     return 0;
 }
@@ -367,7 +367,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, uintptr_t srcva, size_t size, in
     {
         size_t min_size = MIN(targetenv->env_ipc_maxsz, size);
 
-        res = map_region(&targetenv->address_space, targetenv->env_ipc_dstva, &thisenv->address_space, srcva, min_size, perm | PROT_USER_);
+        res = map_region(targetenv->address_space, targetenv->env_ipc_dstva, thisenv->address_space, srcva, min_size, perm | PROT_USER_);
         // res = sys_map_region(envid, targetenv->env_ipc_dstva, curenv->env_id, srcva, min_size, perm);
         if (res < 0) 
             return res;
@@ -471,9 +471,9 @@ static int
 sys_region_refs(uintptr_t addr, size_t size, uintptr_t addr2, uintptr_t size2) {
     // LAB 10: Your code here
     if (addr2 < MAX_USER_ADDRESS) {
-        return region_maxref(&curenv->address_space, addr, size) - region_maxref(&curenv->address_space, addr2, size2);
+        return region_maxref(curenv->address_space, addr, size) - region_maxref(curenv->address_space, addr2, size2);
     } else {
-        return region_maxref(&curenv->address_space, addr, size);
+        return region_maxref(curenv->address_space, addr, size);
     }
 }
 

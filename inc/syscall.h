@@ -20,6 +20,12 @@ enum {
     SYS_ipc_try_send,
     SYS_ipc_recv,
     SYS_gettime,
+/* Itask */
+	SYS_thread_create,
+    SYS_thread_join,
+    SYS_thread_exit,
+    SYS_futex,
+    SYS_set_robust_list,
     NSYSCALLS
 };
 

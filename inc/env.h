@@ -36,7 +36,8 @@ enum {
     ENV_DYING,
     ENV_RUNNABLE,
     ENV_RUNNING,
-    ENV_NOT_RUNNABLE
+    ENV_NOT_RUNNABLE,
+    ENV_ZOMBIE // For threads (itask)
 };
 
 /* Special environment types */
@@ -58,6 +59,11 @@ struct AddressSpace {
 };
 
 
+/* Special types for itask */
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
+
 struct Env {
     struct Trapframe env_tf; /* Saved registers */
     struct Env *env_link;    /* Next free Env */
@@ -70,7 +76,8 @@ struct Env {
     uint8_t *binary; /* Pointer to process ELF image in kernel memory */
 
     /* Address space */
-    struct AddressSpace address_space;
+    struct AddressSpace *address_space; 
+    /* Itask: if we wish to add threads, we will need ref count */ 
 
     /* Exception handling */
     void *env_pgfault_upcall; /* Page fault upcall entry point */
@@ -82,6 +89,25 @@ struct Env {
     uint32_t env_ipc_value;  /* Data value sent to us */
     envid_t env_ipc_from;    /* envid of the sender */
     int env_ipc_perm;        /* Perm of page mapping received */
+    
+    /* Itask */
+    void *env_exit_value;  // For thread_exit/join
+    struct List join_waiters;  // List of envs waiting to join this one
+    struct List join_link;  // Link when waiting to join another
+    struct Waiter *waiting_on_futex;  // If waiting on futex
+    uintptr_t robust_list_head;  // Robust list head
+    size_t robust_list_len;  // Robust list len
+};
+
+// User-space structs for robust (reference only)
+struct robust_list {
+    struct robust_list *next;
+};
+
+struct robust_list_head {
+    struct robust_list list;
+    long futex_offset;
+    void *list_op_pending;
 };
 
 #endif /* !JOS_INC_ENV_H */

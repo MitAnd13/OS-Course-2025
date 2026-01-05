@@ -387,7 +387,7 @@ trap(struct Trapframe *tf) {
          * and userspace pagefault handlers are implemented */
         if ((tf->tf_err & ~FEC_W) == FEC_U && curenv && SANITIZE_USER_SHADOW_BASE <= va &&
             va < SANITIZE_USER_SHADOW_BASE + SANITIZE_USER_SHADOW_SIZE) {
-            int res = map_region(&curenv->address_space, ROUNDDOWN(va, PAGE_SIZE),
+            int res = map_region(curenv->address_space, ROUNDDOWN(va, PAGE_SIZE),
                                  NULL, 0, PAGE_SIZE, ALLOC_ONE | PROT_R | PROT_W | PROT_USER_);
             assert(!res);
         }
