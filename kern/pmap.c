@@ -13,6 +13,7 @@
 #include <kern/pmap.h>
 #include <kern/traceopt.h>
 #include <kern/trap.h>
+#include <kern/futex.h>
 
 /*
  * Term "page" used here does not

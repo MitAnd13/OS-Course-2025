@@ -1,4 +1,3 @@
-#include <inc/futex.h>
 #include <inc/memlayout.h>
 #include <inc/mmu.h>
 #include <inc/error.h>
@@ -7,11 +6,13 @@
 #include <inc/env.h>
 #include <inc/trap.h>
 #include <inc/syscall.h>
+
 #include <kern/alloc.h>
 #include <kern/pmap.h>
 #include <kern/spinlock.h>
 #include <kern/sched.h>
 #include <kern/env.h>  // Для env_block/unblock
+#include <kern/futex.h>
 
 struct FutexBucket futex_buckets[FUTEX_HASHSIZE];
 

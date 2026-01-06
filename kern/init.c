@@ -5,7 +5,6 @@
 #include <inc/assert.h>
 #include <inc/uefi.h>
 #include <inc/memlayout.h>
-#include <inc/futex.h>
 
 #include <kern/monitor.h>
 #include <kern/tsc.h>
@@ -19,6 +18,7 @@
 #include <kern/kclock.h>
 #include <kern/kdebug.h>
 #include <kern/traceopt.h>
+#include <kern/futex.h>
 
 void
 timers_init(void) {

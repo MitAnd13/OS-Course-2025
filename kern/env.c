@@ -21,6 +21,7 @@
 #include <kern/traceopt.h>
 #include <kern/trap.h>
 #include <kern/vsyscall.h>
+#include <kern/futex.h>
 
 /* Currently active environment */
 struct Env *curenv = NULL;
