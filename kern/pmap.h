@@ -119,6 +119,7 @@ void dump_page_table(pte_t *pml4);
 void dump_memory_lists(void);
 void dump_virtual_tree(struct Page *node, int class);
 int user_mem_check(struct Env *env, const void *va, size_t len, int perm);
+static struct Page * page_lookup(struct Page *hint, uintptr_t addr, int class, enum PageState type, bool alloc);
 
 void *kzalloc_region(size_t size);
 
