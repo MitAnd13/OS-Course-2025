@@ -682,7 +682,6 @@ sys_ipc_recv_timeout(uintptr_t dstva, uintptr_t maxsize, uint64_t timeout_ms) {
     env->env_status = ENV_NOT_RUNNABLE;
     env->env_ipc_from = 0;
     env->env_ipc_recving = 1;
-    
     /* Устанавливаем параметры ожидания */
     env->env_ipc_timed_out = 0;
     

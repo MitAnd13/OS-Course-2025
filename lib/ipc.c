@@ -129,13 +129,22 @@ ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size,
     
     uint64_t timeout_ms = timeout_s * 1000ULL;
     int r = sys_ipc_recv_timeout(dstva, maxsz, timeout_ms);
-    if (thisenv->env_ipc_timed_out != 0 && r == 0)
+    if (thisenv->env_ipc_timed_out != 0 && r == 0){
 		//cprintf("%d", r);
 		r = -E_IPC_TIMEOUT;
+	}
+	else if (thisenv->env_ipc_wait_drop != 0 && r == 0){
+		//cprintf("%d", r);
+		r = -E_IPC_RECV_WAIT;
+	}
     if (r < 0) {
         if (r == -E_IPC_TIMEOUT) {
             /* Возвращаем ошибку таймаута */
             return -E_IPC_TIMEOUT;
+        }
+        if (r == -E_IPC_RECV_WAIT) {
+            /* Возвращаем ошибку таймаута */
+            return -E_IPC_RECV_WAIT;
         }
         if (r == -E_BAD_TIMEOUT) {
             return -E_BAD_TIMEOUT;

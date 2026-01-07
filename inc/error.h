@@ -30,6 +30,7 @@ enum {
     E_PIPE = 20,        /* Broken pipe */
     E_IPC_TIMEOUT = 21,
     E_BAD_TIMEOUT = 22,
+    E_IPC_RECV_WAIT = 23,
     MAXERROR
 };
 

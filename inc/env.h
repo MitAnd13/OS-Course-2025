@@ -98,6 +98,7 @@ struct Env {
     uint64_t env_ipc_timeout;      /* Таймаут для IPC в мс*/
     uint64_t env_ipc_start;   /* Время начала ожидания в мс*/
     bool env_ipc_timed_out;        /* Флаг, что таймаут истек */
+    bool env_ipc_wait_drop;
 };
 
 #endif /* !JOS_INC_ENV_H */

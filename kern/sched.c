@@ -34,7 +34,7 @@ sched_yield(void) {
         if (envs[i].env_status == ENV_NOT_RUNNABLE && 
             envs[i].env_ipc_recving && 
             envs[i].env_ipc_timeout > 0) {
-            
+            //cprintf("T\n");
             /* Проверяем, не истек ли таймаут */
             uint64_t current_time = now_ms();
             uint64_t elapsed_time = current_time - envs[i].env_ipc_start;
@@ -51,6 +51,17 @@ sched_yield(void) {
                 envs[i].env_ipc_perm = 0;
             }
         }
+        else if (envs[i].env_ipc_recving && envs[i].env_status != ENV_NOT_RUNNABLE){
+			//cprintf("EEEEEEEEEEEE\n");
+			envs[i].env_ipc_wait_drop = 1;
+            envs[i].env_ipc_recving = 0;
+            envs[i].env_status = ENV_RUNNABLE;
+                
+                /* Сбрасываем поля IPC */
+            envs[i].env_ipc_from = 0;
+            envs[i].env_ipc_value = 0;
+            envs[i].env_ipc_perm = 0;
+		}
     }
     // LAB 3: Your code here:
     const size_t last_sched = curenv ? curenv - envs : 0;
