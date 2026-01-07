@@ -115,9 +115,9 @@ sys_exofork(void) {
 void ipc_send(envid_t to_env, uint32_t value, void *pg, size_t size, int perm);
 int32_t ipc_recv(envid_t *from_env_store, void *pg, size_t *psize, int *perm_store);
 envid_t ipc_find_env(enum EnvType type);
-void ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, size_t size, int perm, uint64_t timeout_ms);
+void ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, size_t size, int perm, uint64_t timeout_s);
 
-int32_t ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, int *perm_store, uint64_t timeout_ms);
+int32_t ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, int *perm_store, uint64_t timeout_s);
 /* fork.c */
 envid_t fork(void);
 envid_t sfork(void);

@@ -5,7 +5,7 @@ receiver(void) {
     envid_t from = 0;
     size_t sz = PAGE_SIZE;
     int perm = 0;
-    int32_t v = ipc_recv_timeout(&from, NULL, &sz, &perm, 5000);
+    int32_t v = ipc_recv_timeout(&from, NULL, &sz, &perm, 5);
     if (v >= 0)
         cprintf("recv_normal: OK (val=%d from=%08x)\n", v, from);
     else
@@ -24,7 +24,7 @@ umain(int argc, char **argv) {
         receiver();
         exit();
     }
-    ipc_send_timeout(child, 123, NULL, 0, 0, 2000);
+    ipc_send_timeout(child, 123, NULL, 0, 0, 2);
     cprintf("send_normal: OK\n");
 
 }

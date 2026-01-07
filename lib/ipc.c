@@ -80,8 +80,10 @@ ipc_find_env(enum EnvType type) {
 
 void
 ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, 
-                 size_t size, int perm, uint64_t timeout_ms) {
+                 size_t size, int perm, uint64_t timeout_s) {
     void *srcva = pg ? pg : (void *)MAX_USER_ADDRESS;
+    uint64_t timeout_ms = timeout_s * 1000ULL;
+
     size_t sendsz = pg ? size : 0;
     int sendperm = pg ? perm : 0;
     
@@ -100,11 +102,11 @@ ipc_send_timeout(envid_t to_env, uint32_t val, void *pg,
 
 int32_t
 ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, 
-                 int *perm_store, uint64_t timeout_ms) {
+                 int *perm_store, uint64_t timeout_s) {
     void *dstva = pg ? pg : (void *)MAX_USER_ADDRESS;
     size_t maxsz = pg ? (size ? *size : PAGE_SIZE) : 0;
     
-    
+    uint64_t timeout_ms = timeout_s * 1000ULL;
     int r = sys_ipc_recv_timeout(dstva, maxsz, timeout_ms);
     
     if (r < 0) {

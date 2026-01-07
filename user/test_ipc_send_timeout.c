@@ -13,8 +13,8 @@ umain(int argc, char **argv) {
         sys_yield();
         exit();
     }
-    ipc_send_timeout(child, 42, NULL, 0, 0, 500);
-    ipc_send_timeout(0xDEADBEEF, 7, NULL, 0, 0, 100);
+    ipc_send_timeout(child, 42, NULL, 0, 0, 5);
+    ipc_send_timeout(0xDEADBEEF, 7, NULL, 0, 0, 1);
 
 }
 
