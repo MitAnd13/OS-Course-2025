@@ -3,6 +3,7 @@
 void
 umain(int argc, char **argv) {
     USED(argc); USED(argv);
+    cprintf("send_timeout: starting\n");
     envid_t child = sys_exofork();
     if (child < 0) {
         cprintf("exofork failed: %i\n", child);
@@ -16,4 +17,3 @@ umain(int argc, char **argv) {
     ipc_send_timeout(child, 42, NULL, 0, 0, 5);
 
 }
-

@@ -3,13 +3,14 @@
 static void
 receiver(void) {
     envid_t from = 0;
+    cprintf("ipc_normal: starting\n");
     size_t sz = PAGE_SIZE;
     int perm = 0;
     int32_t v = ipc_recv_timeout(&from, NULL, &sz, &perm, 5);
     if (v >= 0)
-        cprintf("recv_normal: OK (val=%d from=%08x)\n", v, from);
+        cprintf("ipc_normal: OK (val=%d from=%08x)\n", v, from);
     else
-        cprintf("recv_normal: FAIL (%i)\n", v);
+        cprintf("ipc_normal: FAIL (%i)\n", v);
 }
 
 void
@@ -17,7 +18,7 @@ umain(int argc, char **argv) {
     USED(argc); USED(argv);
     envid_t child = fork();
     if (child < 0) {
-        cprintf("exofork failed: %i\n", child);
+        cprintf("fork failed: %i\n", child);
         return;
     }
     if (child == 0) {

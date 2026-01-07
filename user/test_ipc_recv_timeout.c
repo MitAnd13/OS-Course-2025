@@ -3,6 +3,7 @@
 void
 umain(int argc, char **argv) {
     USED(argc); USED(argv);
+    cprintf("recv_timeout: starting\n");
     envid_t from = 0;
     size_t sz = PAGE_SIZE;
     int perm = 0;

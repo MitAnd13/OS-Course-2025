@@ -179,6 +179,7 @@ sys_sigreturn(const struct Sigframe *frame) {
 int
 sys_sigentry(void *entry) {
     return syscall(SYS_sigentry, 1, (uintptr_t)entry, 0, 0, 0, 0, 0);
+}
 
 int
 sys_ipc_send_timeout(envid_t envid, uint32_t value, void *srcva, 
