@@ -25,6 +25,8 @@ enum {
     SYS_sigaction,
     SYS_sigreturn,
     SYS_sigentry,
+    SYS_ipc_send_timeout,
+    SYS_ipc_recv_timeout,
     NSYSCALLS
 };
 
