@@ -400,6 +400,8 @@ sys_ipc_try_send(envid_t envid, uint32_t value, uintptr_t srcva, size_t size, in
  *  -E_INVAL if dstva < MAX_USER_ADDRESS but dstva is not page-aligned;
  *  -E_INVAL if dstva is valid and maxsize is 0,
  *  -E_INVAL if maxsize is not page aligned. */
+ 
+
 static int
 sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize) {
     // LAB 9: Your code here
@@ -480,9 +482,9 @@ sys_region_refs(uintptr_t addr, size_t size, uintptr_t addr2, uintptr_t size2) {
 /* Блокирующий send с таймаутом */
 static int
 sys_ipc_send_timeout(envid_t envid, uint32_t value, uintptr_t srcva, 
-             size_t size, int perm, uint64_t timeout_ticks) {
-    uint64_t start_ticks = get_ticks();
-    uint64_t deadline = start_ticks + timeout_ticks;
+             size_t size, int perm, uint64_t timeout_ms) {
+    uint64_t start_ms = now_ms();
+    uint64_t deadline = start_ms + timeout_ms;
     
     while (1) {
         int res = sys_ipc_try_send(envid, value, srcva, size, perm);
@@ -498,7 +500,7 @@ sys_ipc_send_timeout(envid_t envid, uint32_t value, uintptr_t srcva,
         }
         
         /* Проверяем таймаут */
-        if (timeout_ticks > 0 && get_ticks() >= deadline) {
+        if (now_ms() >= deadline) {
             return -E_IPC_TIMEOUT;
         }
         
@@ -510,33 +512,34 @@ sys_ipc_send_timeout(envid_t envid, uint32_t value, uintptr_t srcva,
 
 /* Recv с таймаутом */
 static int
-sys_ipc_recv_timeout(uintptr_t dstva, uintptr_t maxsize, uint64_t timeout_ticks) {
-    if (dstva < MAX_USER_ADDRESS && 
-        (ROUNDDOWN(dstva, PAGE_SIZE) != dstva || 
-         maxsize == 0 || 
-         ROUNDDOWN(maxsize, PAGE_SIZE) != maxsize))
+sys_ipc_recv_timeout(uintptr_t dstva, uintptr_t maxsize, uint64_t timeout_ms) {
+    if (dstva < MAX_USER_ADDRESS && (ROUNDDOWN(dstva, PAGE_SIZE) != dstva || maxsize == 0 || ROUNDDOWN(maxsize, PAGE_SIZE) != maxsize))
         return -E_INVAL;
-
-    struct Env *env = curenv;
-    
-    /* Устанавливаем параметры ожидания */
-    env->env_ipc_recving = 1;
+	else if (timeout_ms <= 0)
+		return -E_BAD_TIMEOUT;
+    struct Env *env = NULL;
+    int res = 0;
+    res = envid2env(0, &env, 0);
+    if (res < 0 || env == NULL) {
+        return -E_BAD_ENV;
+    }
     env->env_ipc_dstva = dstva;
     env->env_ipc_maxsz = maxsize;
+    env->env_status = ENV_NOT_RUNNABLE;
+    env->env_ipc_from = 0;
+    env->env_ipc_recving = 1;
+    
+    /* Устанавливаем параметры ожидания */
     env->env_ipc_timed_out = 0;
     
     /* Устанавливаем таймаут, если он задан */
-    if (timeout_ticks > 0) {
-        env->env_ipc_timeout = timeout_ticks;
-        env->env_ipc_start_tick = get_ticks();
+    if (timeout_ms > 0) {
+        env->env_ipc_timeout = timeout_ms;
+       
     } else {
         env->env_ipc_timeout = 0;
     }
-    
-    /* Сбрасываем поля */
-    env->env_ipc_from = 0;
-    env->env_ipc_value = 0;
-    env->env_ipc_perm = 0;
+    env->env_ipc_start = now_ms();
     
     /* Блокируем процесс до получения сообщения или таймаута */
     env->env_status = ENV_NOT_RUNNABLE;
@@ -598,7 +601,7 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
         case SYS_gettime:
             return sys_gettime();
-        case SYS_ipc_send:
+        case SYS_ipc_send_timeout:
             return sys_ipc_send_timeout((envid_t)a1, (uint32_t)a2, a3, 
                                (size_t)a4, (int)a5, (uint64_t)a6);
         

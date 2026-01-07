@@ -7,5 +7,7 @@
 #endif
 
 _Noreturn void sched_yield(void);
-
+uint64_t
+now_ms(void);
+    
 #endif /* !JOS_KERN_SCHED_H */

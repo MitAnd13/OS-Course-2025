@@ -77,3 +77,53 @@ ipc_find_env(enum EnvType type) {
             return envs[i].env_id;
     return 0;
 }
+
+void
+ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, 
+                 size_t size, int perm, uint64_t timeout_ms) {
+    void *srcva = pg ? pg : (void *)MAX_USER_ADDRESS;
+    size_t sendsz = pg ? size : 0;
+    int sendperm = pg ? perm : 0;
+    
+
+    int r = sys_ipc_send_timeout(to_env, (uint64_t)val, srcva, 
+                        sendsz, sendperm, timeout_ms);
+    
+    if (r < 0) {
+        if (r == -E_IPC_TIMEOUT) {
+            panic("ipc_send_timeout: timeout after %lu ms", timeout_ms);
+        }
+        panic("ipc_send_timeout: %i", r);
+    }
+    return;
+}
+
+int32_t
+ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, 
+                 int *perm_store, uint64_t timeout_ms) {
+    void *dstva = pg ? pg : (void *)MAX_USER_ADDRESS;
+    size_t maxsz = pg ? (size ? *size : PAGE_SIZE) : 0;
+    
+    
+    int r = sys_ipc_recv_timeout(dstva, maxsz, timeout_ms);
+    
+    if (r < 0) {
+        if (r == -E_IPC_TIMEOUT) {
+            /* Возвращаем ошибку таймаута */
+            return -E_IPC_TIMEOUT;
+        }
+        if (r == -E_BAD_TIMEOUT) {
+            return -E_BAD_TIMEOUT;
+        }
+        if (from_env_store) *from_env_store = 0;
+        if (perm_store) *perm_store = 0;
+        if (size) *size = 0;
+        return r;
+    }
+    
+    if (from_env_store) *from_env_store = thisenv->env_ipc_from;
+    if (perm_store) *perm_store = thisenv->env_ipc_perm;
+    if (size) *size = thisenv->env_ipc_maxsz;
+    
+    return (int32_t)thisenv->env_ipc_value;
+}

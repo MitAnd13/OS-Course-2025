@@ -84,7 +84,7 @@ struct Env {
     int env_ipc_perm;        /* Perm of page mapping received */
     
     uint64_t env_ipc_timeout;      /* Таймаут для IPC в тиках таймера */
-    uint64_t env_ipc_start_tick;   /* Время начала ожидания в тиках */
+    uint64_t env_ipc_start;   /* Время начала ожидания в тиках */
     bool env_ipc_timed_out;        /* Флаг, что таймаут истек */
 };
 

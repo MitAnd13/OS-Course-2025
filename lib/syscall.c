@@ -155,3 +155,17 @@ int
 sys_gettime(void) {
     return syscall(SYS_gettime, 0, 0, 0, 0, 0, 0, 0);
 }
+
+
+int
+sys_ipc_send_timeout(envid_t envid, uint32_t value, void *srcva, 
+             size_t size, int perm, uint64_t timeout_ms) {
+    return syscall(SYS_ipc_send_timeout, 0, envid, value, (uintptr_t)srcva, 
+                   size, perm, timeout_ms);
+}
+
+int
+sys_ipc_recv_timeout(void *dstva, size_t size, uint64_t timeout_ms) {
+    return syscall(SYS_ipc_recv_timeout, 1, (uintptr_t)dstva, 
+                   size, timeout_ms, 0, 0, 0);
+}

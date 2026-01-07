@@ -96,7 +96,9 @@ int sys_unmap_region(envid_t env, void *pg, size_t size);
 int sys_ipc_try_send(envid_t to_env, uint64_t value, void *pg, size_t size, int perm);
 int sys_ipc_recv(void *rcv_pg, size_t size);
 int sys_gettime(void);
+int sys_ipc_send_timeout(envid_t envid, uint32_t value, void *srcva, size_t size, int perm, uint64_t timeout_ms);
 
+int sys_ipc_recv_timeout(void *dstva, size_t size, uint64_t timeout_ms);
 int vsys_gettime(void);
 
 /* This must be inlined. Exercise for reader: why? */
@@ -113,7 +115,9 @@ sys_exofork(void) {
 void ipc_send(envid_t to_env, uint32_t value, void *pg, size_t size, int perm);
 int32_t ipc_recv(envid_t *from_env_store, void *pg, size_t *psize, int *perm_store);
 envid_t ipc_find_env(enum EnvType type);
+void ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, size_t size, int perm, uint64_t timeout_ms);
 
+int32_t ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, int *perm_store, uint64_t timeout_ms);
 /* fork.c */
 envid_t fork(void);
 envid_t sfork(void);

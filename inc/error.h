@@ -28,6 +28,7 @@ enum {
     E_NOT_EXEC = 18,    /* File not a valid executable */
     E_NOT_SUPP = 19,    /* Operation not supported */
     E_IPC_TIMEOUT = 20,
+    E_BAD_TIMEOUT = 21,
     MAXERROR
 };
 

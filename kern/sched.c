@@ -2,11 +2,16 @@
 #include <inc/x86.h>
 #include <kern/env.h>
 #include <kern/monitor.h>
+#include <kern/kclock.h>
 
 
 struct Taskstate cpu_ts;
 _Noreturn void sched_halt(void);
 
+uint64_t
+now_ms(void) {
+    return (uint64_t)gettime() * 1000ULL;
+}
 /* Choose a user environment to run and run it */
 _Noreturn void
 sched_yield(void) {
@@ -31,13 +36,13 @@ sched_yield(void) {
             envs[i].env_ipc_timeout > 0) {
             
             /* Проверяем, не истек ли таймаут */
-            uint64_t current_ticks = get_ticks();
-            uint64_t elapsed_ticks = current_ticks - envs[i].env_ipc_start_tick;
+            uint64_t current_time = now_ms();
+            uint64_t elapsed_time = current_time - envs[i].env_ipc_start;
             
-            if (elapsed_ticks >= envs[i].env_ipc_timeout) {
+            if (elapsed_time >= envs[i].env_ipc_timeout) {
                 /* Таймаут истек, пробуждаем процесс с ошибкой */
-                envs[i].env_ipc_timed_out = true;
-                envs[i].env_ipc_recving = false;
+                envs[i].env_ipc_timed_out = 1;
+                envs[i].env_ipc_recving = 0;
                 envs[i].env_status = ENV_RUNNABLE;
                 
                 /* Сбрасываем поля IPC */
