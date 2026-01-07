@@ -15,7 +15,7 @@ receiver(void) {
 void
 umain(int argc, char **argv) {
     USED(argc); USED(argv);
-    envid_t child = sys_exofork();
+    envid_t child = fork();
     if (child < 0) {
         cprintf("exofork failed: %i\n", child);
         return;
@@ -25,7 +25,6 @@ umain(int argc, char **argv) {
         exit();
     }
     ipc_send_timeout(child, 123, NULL, 0, 0, 2);
-    cprintf("send_normal: OK\n");
 
 }
 

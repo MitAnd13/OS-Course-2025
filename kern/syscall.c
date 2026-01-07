@@ -504,9 +504,6 @@ sys_ipc_send_timeout(envid_t envid, uint32_t value, uintptr_t srcva,
             return -E_IPC_TIMEOUT;
         }
         
-        /* Освобождаем процессор и ждем */
-        curenv->env_status = ENV_NOT_RUNNABLE;
-        sched_yield();
     }
 }
 
@@ -543,12 +540,6 @@ sys_ipc_recv_timeout(uintptr_t dstva, uintptr_t maxsize, uint64_t timeout_ms) {
     
     /* Блокируем процесс до получения сообщения или таймаута */
     env->env_status = ENV_NOT_RUNNABLE;
-    sched_yield();
-    
-    /* Проверяем, был ли таймаут */
-    if (env->env_ipc_timed_out) {
-        return -E_IPC_TIMEOUT;
-    }
     
     return 0;
 }

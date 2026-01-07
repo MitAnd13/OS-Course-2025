@@ -81,23 +81,28 @@ ipc_find_env(enum EnvType type) {
 void
 ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, 
                  size_t size, int perm, uint64_t timeout_s) {
-    void *srcva = pg ? pg : (void *)MAX_USER_ADDRESS;
-    uint64_t timeout_ms = timeout_s * 1000ULL;
-
+     void *srcva = pg ? pg : (void *)MAX_USER_ADDRESS;
     size_t sendsz = pg ? size : 0;
     int sendperm = pg ? perm : 0;
-    
+    uint64_t start_ms = (uint64_t)sys_gettime()*1000LLU;
+    uint64_t deadline = start_ms + timeout_s*1000LLU;
 
-    int r = sys_ipc_send_timeout(to_env, (uint64_t)val, srcva, 
-                        sendsz, sendperm, timeout_ms);
-    
-    if (r < 0) {
-        if (r == -E_IPC_TIMEOUT) {
-            panic("ipc_send_timeout: timeout after %lu ms", timeout_ms);
+    for (;;) {
+		//cprintf("T!\n");
+        int r = sys_ipc_try_send(to_env, (uint64_t)val, srcva, sendsz, sendperm);
+        //cprintf("E!\n");
+        if (r == 0)
+            return;
+        if (sys_gettime()*1000LLU >= deadline) {
+			cprintf("Timeout!\n");
+			break;
+		}
+        if (r == -E_IPC_NOT_RECV) {
+            sys_yield();
+            continue;
         }
-        panic("ipc_send_timeout: %i", r);
+        panic("ipc_send: %i", r);
     }
-    return;
 }
 
 int32_t
@@ -108,7 +113,9 @@ ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size,
     
     uint64_t timeout_ms = timeout_s * 1000ULL;
     int r = sys_ipc_recv_timeout(dstva, maxsz, timeout_ms);
-    
+    if (thisenv->env_ipc_timed_out != 0 && r == 0)
+		//cprintf("%d", r);
+		r = -E_IPC_TIMEOUT;
     if (r < 0) {
         if (r == -E_IPC_TIMEOUT) {
             /* Возвращаем ошибку таймаута */
