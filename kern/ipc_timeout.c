@@ -6,7 +6,7 @@
 #include <kern/sched.h>
 #include <kern/spinlock.h>
 
-extern struct Env envs[NENV];
+// extern struct Env envs[NENV];
 
 static inline uint64_t
 now_ms(void) {
@@ -42,8 +42,8 @@ ipc_timeout_tick(void) {
                     unlock_kernel();
                     continue;
                 }
-                int sres = sys_ipc_try_send(e->env_ipc_send_target, e->env_ipc_send_value,
-                                            e->env_ipc_send_srcva, e->env_ipc_send_size, e->env_ipc_send_perm);
+                int sres = syscall(SYS_ipc_try_send, e->env_ipc_send_target, e->env_ipc_send_value, e->env_ipc_send_srcva, e->env_ipc_send_size, e->env_ipc_send_perm, 0);
+
                 if (sres == 0) {
                     lock_kernel();
                     e->env_ipc_sending = false;

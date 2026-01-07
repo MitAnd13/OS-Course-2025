@@ -13,6 +13,7 @@
 #include <kern/syscall.h>
 #include <kern/trap.h>
 #include <kern/traceopt.h>
+#include <kern/spinlock.h>
 
 /* Print a string to the system console.
  * The string is exactly 'len' characters long.
