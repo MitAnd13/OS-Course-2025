@@ -1,3 +1,4 @@
+
 #include "fs.h"
 #include "nvme.h"
 
@@ -34,13 +35,20 @@ bc_pgfault(struct UTrapframe *utf) {
     // LAB 10: Your code here
     int res;
     addr = ROUNDDOWN(addr, BLKSIZE);
-    if ((res = sys_alloc_region(CURENVID, addr, BLKSIZE, PROT_RW)))
-        panic("bc_pgfault couldn't alloc region: %i", res);
 
-    *(char *)addr = 0;
+    if ((res = sys_alloc_region(CURENVID, addr, BLKSIZE, PROT_RW))) {
+        panic("bc_pgfault: can't sys_alloc_region(), errno %i\n", res);
+    }
 
-    if ((res = nvme_read(blockno * BLKSECTS, addr, BLKSECTS)))
-        panic("bc_pgfault couldn't read the block: %i", res);
+    *(uint8_t *)addr = 0; 
+
+    if ((res = nvme_read(BLKSECTS * blockno, addr, BLKSECTS)) != NVME_OK) {
+        panic("bc_pgfault: can't nvme_read(), errno %i\n", res);
+    }
+
+    if ((res = sys_map_region(CURENVID, addr, CURENVID, addr, BLKSIZE, PTE_SYSCALL & get_prot(addr)))) {
+        panic("bc_pgfault: sys_map_region failed, errno %d\n", res);
+    }
 
     return 1;
 }
@@ -64,12 +72,19 @@ flush_block(void *addr) {
 
     // LAB 10: Your code here.
     addr = ROUNDDOWN(addr, BLKSIZE);
-    if (is_page_present(addr) && is_page_dirty(addr)) {
-        if ((res = nvme_write(blockno * BLKSECTS, addr, BLKSECTS)))
-            panic("flush_block: nvme write block error - %i\n", res);
-        if ((res = sys_map_region(CURENVID, addr, CURENVID, addr, BLKSIZE, PTE_SYSCALL & get_prot(addr))))
-            panic("flush_block: sys map region error - %i\n", res);
+
+    if (!is_page_present(addr) || !is_page_dirty(addr)) {
+        return;
     }
+
+    if ((res = nvme_write(BLKSECTS * blockno, addr, BLKSECTS)) != NVME_OK) {
+        panic("flush_block: can't nvme_write(), errno %i\n", res);
+    }
+
+    if ((res = sys_map_region(CURENVID, addr, CURENVID, addr, BLKSIZE, PTE_SYSCALL & get_prot(addr)))) {
+        panic("flush_block: can't sys_map_region(), errno %i\n", res);
+    }
+
     assert(!is_page_dirty(addr));
 }
 

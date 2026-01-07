@@ -25,9 +25,13 @@ USERAPPS :=		$(OBJDIR)/user/init \
 			$(OBJDIR)/user/primes \
 			$(OBJDIR)/user/primespipe \
 			$(OBJDIR)/user/sh \
+			$(OBJDIR)/user/kill \
 			$(OBJDIR)/user/testfdsharing \
 			$(OBJDIR)/user/testkbd \
 			$(OBJDIR)/user/testpipe \
+			$(OBJDIR)/user/testsig \
+			$(OBJDIR)/user/testsig_adv \
+			$(OBJDIR)/user/testkill \
 			$(OBJDIR)/user/testpteshare \
 			$(OBJDIR)/user/testshell \
 			$(OBJDIR)/user/hello \

@@ -21,6 +21,7 @@
 #include <inc/fs.h>
 #include <inc/fd.h>
 #include <inc/args.h>
+#include <inc/signal.h>
 
 #ifdef SANITIZE_USER_SHADOW_BASE
 /* asan unpoison routine used for whitelisting regions. */
@@ -96,8 +97,18 @@ int sys_unmap_region(envid_t env, void *pg, size_t size);
 int sys_ipc_try_send(envid_t to_env, uint64_t value, void *pg, size_t size, int perm);
 int sys_ipc_recv(void *rcv_pg, size_t size);
 int sys_gettime(void);
+int sys_sigkill(envid_t envid, int sig);
+int sys_sigwait(const sigset_t *set, int *sig);
+int sys_sigaction(int sig, const struct sigaction *act, struct sigaction *oact);
+int sys_sigreturn(const struct Sigframe *frame);
+int sys_sigentry(void *entry);
 
 int vsys_gettime(void);
+
+int sigkill(envid_t pid, int signo);
+int sigwait(const sigset_t *set, int *sig);
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oact);
+void sig_restore_entry(void);
 
 /* This must be inlined. Exercise for reader: why? */
 static inline envid_t __attribute__((always_inline))

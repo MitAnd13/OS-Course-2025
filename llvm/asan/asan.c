@@ -192,6 +192,10 @@ void
 __asan_version_mismatch_check_v8(void) {
 }
 
+void
+__asan_version_mismatch_check_apple_clang_1700(void) {
+}
+
 /*
  * TODO: implement these (why do we need them???)
  */

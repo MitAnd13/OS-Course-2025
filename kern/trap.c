@@ -1,4 +1,3 @@
-#include "trap.h"
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
@@ -17,6 +16,7 @@
 #include <kern/timer.h>
 #include <kern/vsyscall.h>
 #include <kern/traceopt.h>
+#include <kern/signal.h>
 
 static struct Taskstate ts;
 
@@ -100,92 +100,69 @@ trapname(int trapno) {
     return "(unknown trap)";
 }
 
-#ifdef CONFIG_KSPACE
-    extern void clock_thdlr(void);
-    extern void timer_thdlr(void);
-#else
-    extern void th_divide(void);
-    extern void th_debug(void);
-    extern void th_nmi(void);
-    extern void th_brkpt(void);
-    extern void th_oflow(void);
-    extern void th_bound(void);
-    extern void th_illop(void);
-    extern void th_device(void);
-    extern void th_dblflt(void);
-    extern void th_tss(void);
-    extern void th_segnp(void);
-    extern void th_stack(void);
-    extern void th_gpflt(void);
-    extern void th_pgflt(void);
-    extern void th_fperr(void);
-    extern void th_align(void);
-    extern void th_mchk(void);
-    extern void th_simderr(void);
-    extern void th_syscall(void);
-    extern void trap_syscall(void);
-    extern void trap_irq_timer(void);
-    extern void trap_irq_clock(void);
-    extern void trap_irq_spurious(void);
-    extern void trap_irq_kbd(void);
-    extern void trap_irq_serial(void);
-    extern void trap_irq_ide(void);
-    extern void trap_irq_error(void);
-#endif
+// from trapentry.S
+extern void clock_thdlr(void);
+extern void timer_thdlr(void);
 
+extern void thdlr0(void);
+extern void thdlr1(void);
+extern void thdlr2(void);
+extern void thdlr3(void);
+extern void thdlr4(void);
+extern void thdlr5(void);
+extern void thdlr6(void);
+extern void thdlr7(void);
+extern void thdlr8(void);
+extern void thdlr10(void);
+extern void thdlr11(void);
+extern void thdlr12(void);
+extern void thdlr13(void);
+extern void thdlr14(void);
+extern void thdlr15(void);
+extern void thdlr16(void);
+extern void thdlr17(void);
+extern void thdlr18(void);
+extern void thdlr19(void);
+extern void thdlr48(void);
+extern void kbd_thdlr(void);
+extern void serial_thdlr(void);
 void
 trap_init(void) {
-    // LAB 4: Your code here
-    // LAB 5: Your code here
-#ifdef CONFIG_KSPACE
-    idt[IRQ_OFFSET + IRQ_TIMER] = GATE(0, GD_KT, (uintptr_t)timer_thdlr, 0);
-    idt[IRQ_OFFSET + IRQ_CLOCK] = GATE(0, GD_KT, (uintptr_t)clock_thdlr, 0);
-#else
-    // LAB 8: Insert trap handlers into IDT
+    // LAB 4: Your code here IMPL
+    idt[IRQ_OFFSET + IRQ_CLOCK] = GATE(0, GD_KT, clock_thdlr, 0);
+    // LAB 5: Your code here IMPL
+    idt[IRQ_OFFSET + IRQ_TIMER] = GATE(0, GD_KT, timer_thdlr, 0);
 
-    // 0–7: без кода ошибки
-    idt[T_DIVIDE] = GATE(0, GD_KT, th_divide, 0);
-    idt[T_DEBUG]  = GATE(0, GD_KT, th_debug,  0);
-    idt[T_NMI]    = GATE(0, GD_KT, th_nmi,    0);
-    idt[T_BRKPT]  = GATE(0, GD_KT, th_brkpt,  3);
-    idt[T_OFLOW]  = GATE(0, GD_KT, th_oflow,  0);
-    idt[T_BOUND]  = GATE(0, GD_KT, th_bound,  0);
-    idt[T_ILLOP]  = GATE(0, GD_KT, th_illop,  0);
-    idt[T_DEVICE] = GATE(0, GD_KT, th_device, 0);
-
-    // 8: double fault — с error code
-    idt[T_DBLFLT] = GATE(0, GD_KT, th_dblflt, 0);
-
-    // 10–14, 17: с error code
-    idt[T_TSS]    = GATE(0, GD_KT, th_tss,    0);
-    idt[T_SEGNP]  = GATE(0, GD_KT, th_segnp,  0);
-    idt[T_STACK]  = GATE(0, GD_KT, th_stack,  0);
-    idt[T_GPFLT]  = GATE(0, GD_KT, th_gpflt,  0);
-    idt[T_PGFLT]  = GATE(0, GD_KT, th_pgflt,  0);
-
-    idt[T_FPERR]   = GATE(0, GD_KT, th_fperr,   0);
-    idt[T_ALIGN]   = GATE(0, GD_KT, th_align,   0);
-    idt[T_MCHK]    = GATE(0, GD_KT, th_mchk,    0);
-    idt[T_SIMDERR] = GATE(0, GD_KT, th_simderr, 0);
-
-    idt[T_SYSCALL] = GATE(0, GD_KT, trap_syscall, 3);
-
-    idt[IRQ_OFFSET + IRQ_SPURIOUS] = GATE(0, GD_KT, trap_irq_spurious, 0);
-    idt[IRQ_OFFSET + IRQ_SERIAL]   = GATE(0, GD_KT, trap_irq_serial,   0);
-    idt[IRQ_OFFSET + IRQ_TIMER]    = GATE(0, GD_KT, trap_irq_timer,    0);
-    idt[IRQ_OFFSET + IRQ_CLOCK]    = GATE(0, GD_KT, trap_irq_clock,    0);
-    idt[IRQ_OFFSET + IRQ_KBD]      = GATE(0, GD_KT, trap_irq_kbd,      0);
-    idt[IRQ_OFFSET + IRQ_IDE]      = GATE(0, GD_KT, trap_irq_ide,      0);
-    idt[IRQ_OFFSET + IRQ_ERROR]    = GATE(0, GD_KT, trap_irq_error,    0);
-#endif
-
-    /* Setup #PF handler dedicated stack */
+    // LAB 8: Your code here DONE
+    /* Insert trap handlers into IDT */
+    idt[T_DIVIDE] = GATE(0, GD_KT, thdlr0, 0);
+    idt[T_DEBUG] = GATE(0, GD_KT, thdlr1, 0);
+    idt[T_NMI] = GATE(0, GD_KT, thdlr2, 0);
+    idt[T_BRKPT] = GATE(0, GD_KT, thdlr3, 3);
+    idt[T_OFLOW] = GATE(0, GD_KT, thdlr4, 0);
+    idt[T_BOUND] = GATE(0, GD_KT, thdlr5, 0);
+    idt[T_ILLOP] = GATE(0, GD_KT, thdlr6, 0);
+    idt[T_DEVICE] = GATE(0, GD_KT, thdlr7, 0);
+    idt[T_DBLFLT] = GATE(0, GD_KT, thdlr8, 0);
+    idt[T_TSS] = GATE(0, GD_KT, thdlr10, 0);
+    idt[T_SEGNP] = GATE(0, GD_KT, thdlr11, 0);
+    idt[T_STACK] = GATE(0, GD_KT, thdlr12, 0);
+    idt[T_GPFLT] = GATE(0, GD_KT, thdlr13, 0);
+    idt[T_PGFLT] = GATE(0, GD_KT, thdlr14, 0);
+    idt[T_FPERR] = GATE(0, GD_KT, thdlr16, 0);
+    idt[T_ALIGN] = GATE(0, GD_KT, thdlr17, 0);
+    idt[T_MCHK] = GATE(0, GD_KT, thdlr18, 0);
+    idt[T_SIMDERR] = GATE(0, GD_KT, thdlr19, 0);
+    idt[T_SYSCALL] = GATE(0, GD_KT, thdlr48, 3);
+    /* Setup #PF handler dedicated stack
+     * It should be switched on #PF because
+     * #PF is the only kind of exception that
+     * can legally happen during normal kernel
+     * code execution */
     idt[T_PGFLT].gd_ist = 1;
-
     // LAB 11: Your code here
-    idt[IRQ_OFFSET + IRQ_KBD] = GATE(0, GD_KT, trap_irq_kbd, 0);
-    idt[IRQ_OFFSET + IRQ_SERIAL] = GATE(0, GD_KT, trap_irq_serial, 0);
-
+    idt[IRQ_OFFSET + IRQ_KBD] = GATE(0, GD_KT, kbd_thdlr, 3);
+    idt[IRQ_OFFSET + IRQ_SERIAL] = GATE(0, GD_KT, serial_thdlr, 3);
     /* Per-CPU setup */
     trap_init_percpu();
 }
@@ -303,11 +280,11 @@ trap_dispatch(struct Trapframe *tf) {
         return;
     case T_PGFLT:
         /* Handle processor exceptions. */
-        // LAB 9: Your code here.
+        // LAB 9: Your code here. DONE
         page_fault_handler(tf);
         return;
     case T_BRKPT:
-        // LAB 8: Your code here.
+        // LAB 8: Your code here DONE
         monitor(tf);
         return;
     case IRQ_OFFSET + IRQ_SPURIOUS:
@@ -319,29 +296,28 @@ trap_dispatch(struct Trapframe *tf) {
             print_trapframe(tf);
         }
         return;
-    case IRQ_OFFSET + IRQ_TIMER:
     case IRQ_OFFSET + IRQ_CLOCK:
-        // LAB 4: Your code here
+    case IRQ_OFFSET + IRQ_TIMER:
         // LAB 5: Your code here
-        // LAB 12: Your code here
         timer_for_schedule->handle_interrupts();
         vsys[VSYS_gettime] = gettime();
         sched_yield();
         // LAB 12: Your code here
         return;
-    // LAB 11: Your code here
-    /* Handle keyboard (IRQ_KBD + kbd_intr()) and
-        * serial (IRQ_SERIAL + serial_intr()) interrupts. */
-    case IRQ_OFFSET + IRQ_SERIAL:
-        serial_intr();
-        pic_send_eoi(IRQ_SERIAL);
-        return;
+        // LAB 11: Your code here
+        /* Handle keyboard (IRQ_KBD + kbd_intr()) and
+         * serial (IRQ_SERIAL + serial_intr()) interrupts. */
+                // LAB 11: Your code here
+        /* Handle keyboard (IRQ_KBD + kbd_intr()) and
+         * serial (IRQ_SERIAL + serial_intr()) interrupts. */
     case IRQ_OFFSET + IRQ_KBD:
         kbd_intr();
-        pic_send_eoi(IRQ_KBD);
+        sched_yield();
         return;
-    
-    
+    case IRQ_OFFSET + IRQ_SERIAL:
+        serial_intr();
+        sched_yield();
+        return;
     default:
         print_trapframe(tf);
         if (!(tf->tf_cs & 3))
@@ -411,6 +387,8 @@ trap(struct Trapframe *tf) {
         }
         if (!res) {
             in_page_fault = 0;
+            if (curenv)
+                sig_deliver_pending(curenv, tf);
             env_pop_tf(tf);
         }
     }
@@ -443,7 +421,7 @@ trap(struct Trapframe *tf) {
 static _Noreturn void
 page_fault_handler(struct Trapframe *tf) {
     uintptr_t cr2 = rcr2();
-    uintptr_t fault_va = cr2;
+    (void)cr2;
 
     /* Handle kernel-mode page faults. */
     if (!(tf->tf_err & FEC_U)) {
@@ -485,64 +463,58 @@ page_fault_handler(struct Trapframe *tf) {
 
     static_assert(UTRAP_RIP == offsetof(struct UTrapframe, utf_rip), "UTRAP_RIP should be equal to RIP offset");
     static_assert(UTRAP_RSP == offsetof(struct UTrapframe, utf_rsp), "UTRAP_RSP should be equal to RSP offset");
-    if (!curenv->env_pgfault_upcall) {
-        cprintf("[%08x] user fault va %p ip %p\n",
-                curenv->env_id, (void *)fault_va, (void *)tf->tf_rip);
-        print_trapframe(tf);
-        env_destroy(curenv);
-        while (1) ;
-    }
 
-    uintptr_t ux_top = USER_EXCEPTION_STACK_TOP;
-    uintptr_t ux_bot = USER_EXCEPTION_STACK_TOP - USER_EXCEPTION_STACK_SIZE;
+    /* Force allocation of exception stack page to prevent memcpy from
+     * causing pagefault during another pagefault */
+    // LAB 9: Your code here: 
+    force_alloc_page(&curenv->address_space, USER_EXCEPTION_STACK_TOP - PAGE_SIZE, PAGE_SIZE);
 
-    uintptr_t utf_addr;
-    if (tf->tf_rsp >= ux_bot && tf->tf_rsp < ux_top) {
-        utf_addr = tf->tf_rsp - sizeof(struct UTrapframe) - sizeof(uint64_t);
+    /* Assert existance of exception stack */
+    // LAB 9: Your code here:
+    uintptr_t cur_ux_rsp;
+
+    if (tf->tf_rsp < USER_EXCEPTION_STACK_TOP && tf->tf_rsp > USER_EXCEPTION_STACK_TOP - PAGE_SIZE) {
+        cur_ux_rsp = tf->tf_rsp - sizeof(uintptr_t) - sizeof(struct UTrapframe);
     } else {
-        utf_addr = ux_top - sizeof(struct UTrapframe);
+        cur_ux_rsp = USER_EXCEPTION_STACK_TOP - sizeof(struct UTrapframe);
     }
 
-    if (user_mem_check(curenv, (void *)utf_addr, sizeof(struct UTrapframe),
-                       PROT_W | PROT_USER_) < 0) {
+    user_mem_assert(curenv, (void *)cur_ux_rsp, sizeof(struct UTrapframe), PROT_W);
 
-        char errstr[6];
-        errstr[0] = (tf->tf_err & FEC_P) ? 'P' : '-';
-        errstr[1] = (tf->tf_err & FEC_U) ? 'U' : '-';
-        errstr[2] = (tf->tf_err & FEC_W) ? 'W' : '-';
-        errstr[3] = '-';
-        errstr[4] = '-';
-        errstr[5] = '\0';
+    /* Build local copy of UTrapframe */
+    // LAB 9: Your code here
 
+    struct UTrapframe utf = {
+            .utf_err = tf->tf_err,
+            .utf_fault_va = cr2,
+            .utf_regs = tf->tf_regs,
+            .utf_rflags = tf->tf_rflags,
+            .utf_rip = tf->tf_rip,
+            .utf_rsp = tf->tf_rsp};
 
-        cprintf("<%p> Page fault ip=%08lX va=%08lX err=%s -> fault\n",
-                tf, tf->tf_rip, fault_va, errstr);
-
-
-        user_mem_assert(curenv, (void *)utf_addr, sizeof(struct UTrapframe),
-                        PROT_W | PROT_USER_);
-    }
-
-
-    user_mem_assert(curenv, (void *)utf_addr, sizeof(struct UTrapframe), PROT_W | PROT_USER_);
-    force_alloc_page(current_space, utf_addr, MAX_ALLOCATION_CLASS);
-    force_alloc_page(current_space, utf_addr + sizeof(struct UTrapframe) - 1, MAX_ALLOCATION_CLASS);
-
-    struct UTrapframe utf;
-    utf.utf_fault_va = fault_va;
-    utf.utf_err      = tf->tf_err;
-    utf.utf_regs     = tf->tf_regs;
-    utf.utf_rip      = tf->tf_rip;
-    utf.utf_rflags   = tf->tf_rflags;
-    utf.utf_rsp      = tf->tf_rsp;
-
-    nosan_memcpy((void *)utf_addr, &utf, sizeof(utf));
-
-    tf->tf_rsp = utf_addr;
+    tf->tf_rsp = cur_ux_rsp;
     tf->tf_rip = (uintptr_t)curenv->env_pgfault_upcall;
 
+
+    /* And then copy it userspace (nosan_memcpy()) */
+    // LAB 9: Your code here:
+    struct AddressSpace *old_as = switch_address_space(&curenv->address_space);
+    set_wp(0);
+    nosan_memcpy((void *)cur_ux_rsp, (void *)&utf, sizeof(struct UTrapframe));
+    set_wp(1);
+    switch_address_space(old_as);
+
+    /* Reset in_page_fault flag */
+    // LAB 9: Your code here:
+    // if (envs->env_tf.tf_trapno == T_PGFLT) {
+    //     in_page_fault = 0;
+    // }
     in_page_fault = 0;
 
+    /* Rerun current environment */
+    // LAB 9: Your code here
     env_run(curenv);
+
+    // Must be unreachable
     while (1);
 }

@@ -42,6 +42,22 @@ struct OpenFile opentab[MAXOPEN] = {
 /* Virtual address at which to receive page mappings containing client requests. */
 union Fsipc *fsreq = (union Fsipc *)0x0FFFF000;
 
+static void
+fs_ipc_send(envid_t to_env, uint32_t val, void *pg, size_t size, int perm) {
+    if (!pg)
+        pg = (void *)MAX_USER_ADDRESS;
+
+    int res;
+    do {
+        res = sys_ipc_try_send(to_env, val, pg, size, perm);
+        if (res == -E_BAD_ENV)
+            return;
+        if (res && res != -E_IPC_NOT_RECV)
+            panic("fs_ipc_send: failed to send %u to env %d, errno %i\n", val, to_env, res);
+        sys_yield();
+    } while (res);
+}
+
 void
 serve_init(void) {
     uintptr_t va = FILE_BASE;
@@ -107,7 +123,7 @@ serve_open(envid_t envid, struct Fsreq_open *req,
 
     /* Find an open file ID */
     if ((res = openfile_alloc(&o)) < 0) {
-        if (debug) cprintf("openfile_alloc failed: %i", res);
+        if (debug) cprintf("openfile_alloc failed: %i\n", res);
         return res;
     }
 
@@ -116,13 +132,13 @@ serve_open(envid_t envid, struct Fsreq_open *req,
         if ((res = file_create(path, &f)) < 0) {
             if (!(req->req_omode & O_EXCL) && res == -E_FILE_EXISTS)
                 goto try_open;
-            if (debug) cprintf("file_create failed: %i", res);
+            if (debug) cprintf("file_create failed: %i\n", res);
             return res;
         }
     } else {
     try_open:
         if ((res = file_open(path, &f)) < 0) {
-            if (debug) cprintf("file_open failed: %i", res);
+            if (debug) cprintf("file_open failed: %i\n", res);
             return res;
         }
     }
@@ -130,12 +146,12 @@ serve_open(envid_t envid, struct Fsreq_open *req,
     /* Truncate */
     if (req->req_omode & O_TRUNC) {
         if ((res = file_set_size(f, 0)) < 0) {
-            if (debug) cprintf("file_set_size failed: %i", res);
+            if (debug) cprintf("file_set_size failed: %i\n", res);
             return res;
         }
     }
     if ((res = file_open(path, &f)) < 0) {
-        if (debug) cprintf("file_open failed: %i", res);
+        if (debug) cprintf("file_open failed: %i\n", res);
         return res;
     }
 
@@ -198,20 +214,19 @@ serve_read(envid_t envid, union Fsipc *ipc) {
     }
 
     // LAB 10: Your code here
-    struct Fsret_read *ret = &ipc->readRet;
-    struct OpenFile *o;
-    int res;
+    req->req_n = req->req_n > PAGE_SIZE ? PAGE_SIZE : req->req_n;
+    struct OpenFile *po;
+    int status;
 
-    if ((res = openfile_lookup(envid, req->req_fileid, &o)) < 0)
-        return res;
+    if ((status = openfile_lookup(envid, req->req_fileid, &po))) {
+        return status;
+    }
 
-    if (req->req_n > PAGE_SIZE)
-        req->req_n = PAGE_SIZE;
+    if ((status = file_read(po->o_file, ipc->readRet.ret_buf, req->req_n, po->o_fd->fd_offset)) > 0) {
+        po->o_fd->fd_offset += status;
+    }
 
-    int bytes_cnt; ;
-    if ((bytes_cnt = file_read(o->o_file, ret->ret_buf, req->req_n, o->o_fd->fd_offset)) > 0)
-        o->o_fd->fd_offset += bytes_cnt;
-    return bytes_cnt;
+    return status;
 }
 
 /* Write req->req_n bytes from req->req_buf to req_fileid, starting at
@@ -225,23 +240,18 @@ serve_write(envid_t envid, union Fsipc *ipc) {
         cprintf("serve_write %08x %08x %08x\n", envid, req->req_fileid, (uint32_t)req->req_n);
 
     // LAB 10: Your code here
-    struct OpenFile *o;
-    int res;
+    struct OpenFile *po;
+    int status;
 
-    if ((res = openfile_lookup(envid, req->req_fileid, &o)))
-        return res;
-
-    off_t max_off = req->req_n + o->o_fd->fd_offset;
-    if (max_off > o->o_file->f_size)
-    {
-        if ((res = file_set_size(o->o_file, max_off)) < 0) 
-            return res;
+    if ((status = openfile_lookup(envid, req->req_fileid, &po))) {
+        return status;
     }
 
-    int bytes_cnt;
-    if ((bytes_cnt = file_write(o->o_file, req->req_buf, req->req_n, o->o_fd->fd_offset)) > 0)
-        o->o_fd->fd_offset += bytes_cnt;
-    return bytes_cnt;
+    if ((status = file_write(po->o_file, req->req_buf, req->req_n, po->o_fd->fd_offset)) > 0) {
+        po->o_fd->fd_offset += status;
+    }
+
+    return status;
 }
 
 /* Stat ipc->stat.req_fileid.  Return the file's struct Stat to the
@@ -327,7 +337,7 @@ serve(void) {
             cprintf("Invalid request code %d from %08x\n", req, whom);
             res = -E_INVAL;
         }
-        ipc_send(whom, res, pg, PAGE_SIZE, perm);
+        fs_ipc_send(whom, res, pg, PAGE_SIZE, perm);
         sys_unmap_region(0, fsreq, PAGE_SIZE);
     }
 }

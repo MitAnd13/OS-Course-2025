@@ -145,5 +145,6 @@ void __asan_unregister_image_globals(uptr p);
 void __asan_register_image_globals(uptr p);
 
 void __asan_version_mismatch_check_v8(void);
+void __asan_version_mismatch_check_apple_clang_1700(void);
 
 #endif /* __ASAN_H__ */

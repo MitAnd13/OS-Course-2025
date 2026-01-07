@@ -155,3 +155,28 @@ int
 sys_gettime(void) {
     return syscall(SYS_gettime, 0, 0, 0, 0, 0, 0, 0);
 }
+
+int
+sys_sigkill(envid_t envid, int sig) {
+    return syscall(SYS_sigkill, 1, envid, (uintptr_t)sig, 0, 0, 0, 0);
+}
+
+int
+sys_sigwait(const sigset_t *set, int *sig) {
+    return syscall(SYS_sigwait, 1, (uintptr_t)set, (uintptr_t)sig, 0, 0, 0, 0);
+}
+
+int
+sys_sigaction(int sig, const struct sigaction *act, struct sigaction *oact) {
+    return syscall(SYS_sigaction, 1, (uintptr_t)sig, (uintptr_t)act, (uintptr_t)oact, 0, 0, 0);
+}
+
+int
+sys_sigreturn(const struct Sigframe *frame) {
+    return syscall(SYS_sigreturn, 1, (uintptr_t)frame, 0, 0, 0, 0, 0);
+}
+
+int
+sys_sigentry(void *entry) {
+    return syscall(SYS_sigentry, 1, (uintptr_t)entry, 0, 0, 0, 0, 0);
+}

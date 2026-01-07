@@ -20,7 +20,6 @@
 
 #define WHITESPACE "\t\r\n "
 #define MAXARGS    16
-#define CALL_INSN_LEN 5
 
 /* Functions implementing monitor commands */
 int mon_help(int argc, char **argv, struct Trapframe *tf);
@@ -78,63 +77,49 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf) {
     return 0;
 }
 
-
-static inline int
-rbp_in_range(uint64_t rbp, uint64_t lo, uint64_t hi) {
-    if (rbp < lo) return 0;
-    if (hi < 16) return 0;
-    return rbp <= hi - 16;
+/*реализация произвольной команды*/
+int mon_hello(int argc, char **arhv, struct Trapframe *tf) {
+    cprintf("Hello, World!\n");
+    return 0;
 }
 
-static inline int
-rbp_valid(uint64_t rbp) {
-    if (rbp == 0) return 0;
-    if (rbp & 7) return 0;
-    if (rbp_in_range(rbp, KERN_STACK_TOP - KERN_STACK_SIZE, KERN_STACK_TOP)) return 1;
-    if (rbp_in_range(rbp, KERN_PF_STACK_TOP - KERN_PF_STACK_SIZE, KERN_PF_STACK_TOP)) return 1;
-    return 0;
+void
+backtrace_print_format(uint64_t num) {
+    uint64_t buf = num;
+    size_t zeroes = 16;
+    while (buf != 0) {
+        --zeroes;
+        buf /= 16;
+    }
+    for (size_t i = 0; i < zeroes; ++i)
+        cprintf("0");
+    cprintf("%lx", num);
 }
 
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
-    (void)argc; (void)argv; (void)tf;
-
+    // LAB 2: Your code here
     cprintf("Stack backtrace:\n");
-
     uint64_t rbp = read_rbp();
-    const int max_frames = 64;
+    while (rbp != 0) {
+        uint64_t *ptr = (uint64_t *)rbp;
+        uint64_t rip = ptr[1];
 
-    for (int depth = 0; depth < max_frames; depth++) {
-        if (!rbp_valid(rbp)) {
-            cprintf("  backtrace stopped: invalid rbp %016lx\n", rbp);
-            break;
-        }
-
-        uint64_t *frame = (uint64_t *)rbp;
-        uint64_t next_rbp = frame[0];
-        uint64_t rip      = frame[1];
-
-        cprintf("  rbp %016lx  rip %016lx\n", rbp, rip);
+        cprintf("  rbp ");
+        backtrace_print_format(rbp);
+        cprintf("  rip ");
+        backtrace_print_format(rip);
+        cprintf("\n");
 
         struct Ripdebuginfo info;
-        if (debuginfo_rip(rip, &info) == 0) {
-            uint64_t call_site = (rip >= CALL_INSN_LEN) ? (rip - CALL_INSN_LEN) : rip;
-            uint64_t off = (info.rip_fn_addr && call_site >= info.rip_fn_addr)
-                         ? (call_site - info.rip_fn_addr) : 0;
-            cprintf("    %s:%d: %.*s+%lu\n",
-                    info.rip_file, info.rip_line,
-                    info.rip_fn_namelen, info.rip_fn_name,
-                    (unsigned long)off);
-        } else {
-            cprintf("    <no debug info>\n");
-        }
-
-        if (next_rbp == 0) break;
-        if (next_rbp <= rbp) break;
-
-        rbp = next_rbp;
+        int error = debuginfo_rip((uintptr_t)rip, &info);
+        if (error == 0)
+            cprintf("    %s:%d: %*s+%lu\n", info.rip_file, info.rip_line, info.rip_fn_namelen, info.rip_fn_name, 
+                rip - info.rip_fn_addr);
+        else
+            cprintf("Error: getting debuginfo_rip() %lx\n", rip);
+        rbp = *ptr;
     }
-
     return 0;
 }
 
@@ -143,20 +128,27 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
 
 int
 mon_start(int argc, char **argv, struct Trapframe *tf) {
-    if (argc < 2) { cprintf("usage: timer_start <pit|hpet0|hpet1|pm>\n"); return 0; }
+    if (argc != 2)
+        return 1;
+
     timer_start(argv[1]);
     return 0;
 }
 
 int
 mon_stop(int argc, char **argv, struct Trapframe *tf) {
+    if (argc != 1)
+        return 1;
+
     timer_stop();
     return 0;
 }
 
 int
 mon_frequency(int argc, char **argv, struct Trapframe *tf) {
-    if (argc < 2) { cprintf("usage: timer_freq <pit|hpet0|hpet1|pm>\n"); return 0; }
+    if (argc != 2)
+        return 1;
+
     timer_cpu_frequency(argv[1]);
     return 0;
 }
@@ -174,50 +166,34 @@ mon_memory(int argc, char **argv, struct Trapframe *tf) {
 int
 mon_pagetable(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
-    (void)argc;
-    (void)argv;
-    (void)tf;
-
-    dump_page_table(kspace.pml4);
+    dump_page_table(current_space->pml4);
     return 0;
 }
 
 int
 mon_virt(int argc, char **argv, struct Trapframe *tf) {
     // LAB 7: Your code here
-    (void)argc;
-    (void)argv;
-    (void)tf;
-
-    dump_virtual_tree(kspace.root, MAX_CLASS);
+    dump_virtual_tree(current_space->root, MAX_CLASS);
     return 0;
 }
 
 // LAB 4: Your code here
 int
-mon_dumpcmos(int argc, char **argv, struct Trapframe *tf)
-{
-        // Dump CMOS memory in the following format:
+mon_dumpcmos(int argc, char **argv, struct Trapframe *tf) {
+    // Dump CMOS memory in the following format:
     // 00: 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
     // 10: 00 ..
     // Make sure you understand the values read.
     // Hint: Use cmos_read8()/cmos_write8() functions.
     // LAB 4: Your code here
-// LAB 4: Your code here
-    const int n = 0x80; // 128 bytes: 0x00..0x7F
-
-    for (int off = 0; off < n; off++) {
-        if ((off & 0x0F) == 0)
-            cprintf("%02x: ", off);                
-
-        cprintf("%02x ", cmos_read8(CMOS_START + off));
-
-        if ((off & 0x0F) == 0x0F)
-            cprintf("\n");
+    for (size_t i = 0; i < 128; i++) {
+        if (i == 0)
+            cprintf("00:");
+        else if (i % 16 == 0)
+            cprintf("\n%02lx:", i);
+        cprintf(" %02x", cmos_read8(i));
     }
-
-    if ((n & 0x0F) != 0)
-        cprintf("\n");
+    cprintf("\n");
 
     return 0;
 }

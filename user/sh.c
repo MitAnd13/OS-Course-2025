@@ -18,9 +18,10 @@ int gettoken(char *s, char **token);
 void
 runcmd(char *s) {
     char *argv[MAXARGS], *t, argv0buf[BUFSIZ];
-    int argc, c, i, r, p[2], fd, pipe_child;
+    int argc, c, i, r, p[2], fd, pipe_child, bg;
 
     pipe_child = 0;
+    bg = 0;
     gettoken(s, 0);
 
 again:
@@ -49,15 +50,18 @@ again:
              * then close the original 'fd'. */
 
             // LAB 11: Your code here
-            if ((fd = open(t, O_RDONLY)) < 0) {
-                cprintf("open %s for read: %i", t, fd);
+            fd = open(t, O_RDONLY);
+            
+            if (fd < 0) {
+                cprintf("failed to open %s", t);
                 exit();
             }
             
-            if (fd != 0) {
+            if (fd) {
                 dup(fd, 0);
                 close(fd);
             }
+       
             break;
 
         case '>': /* Output redirection */
@@ -104,6 +108,9 @@ again:
             }
             panic("| not implemented");
             break;
+        case '&': /* Background */
+            bg = 1;
+            goto runit;
 
         case 0: /* String is complete */
             /* Run the current command! */
@@ -148,7 +155,7 @@ runit:
     /* In the parent, close all file descriptors and wait for the
      * spawned command to exit. */
     close_all();
-    if (r >= 0) {
+    if (r >= 0 && !bg) {
         if (debug) cprintf("[%08x] WAIT %s %08x\n", thisenv->env_id, argv[0], r);
         wait(r);
         if (debug) cprintf("[%08x] wait finished\n", thisenv->env_id);
@@ -156,7 +163,7 @@ runit:
 
     /* If we were the left-hand part of a pipe,
      * wait for the right-hand part to finish. */
-    if (pipe_child) {
+    if (pipe_child && !bg) {
         if (debug) cprintf("[%08x] WAIT pipe_child %08x\n", thisenv->env_id, pipe_child);
         wait(pipe_child);
         if (debug) cprintf("[%08x] wait finished\n", thisenv->env_id);

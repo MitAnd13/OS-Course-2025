@@ -49,14 +49,13 @@ static void
 rtc_timer_pic_interrupt(void) {
     // LAB 4: Your code here
     // Enable PIC interrupts.
-    pic_irq_unmask(IRQ_CLOCK + IRQ_OFFSET);
-    trap_init();
+    pic_irq_unmask(IRQ_CLOCK);
 }
 
 static void
 rtc_timer_pic_handle(void) {
     rtc_check_status();
-    pic_send_eoi(IRQ_CLOCK + IRQ_OFFSET);
+    pic_send_eoi(IRQ_CLOCK);
 }
 
 struct Timer timer_rtc = {
@@ -109,33 +108,30 @@ get_time(void) {
 int
 gettime(void) {
     // LAB 12: your code here
+    int res = 0;
+    int time = 0;
+
     while (cmos_read8(RTC_AREG) & RTC_UPDATE_IN_PROGRESS);
 
-    int t0 = get_time();
-    int t1 = get_time();
+    do {
+        res = get_time();
+        time = get_time();
+    } while (res != time);
 
-    if (t0 != t1)
-        t0 = get_time();
-    
-    return t0;
+    return res;
 }
 
 void
 rtc_timer_init(void) {
     // LAB 4: Your code here
     // (use cmos_read8()/cmos_write8())
-    uint8_t rtc_b = cmos_read8(RTC_BREG);
-    rtc_b = rtc_b | 0x40;
-    cmos_write8(RTC_BREG, rtc_b);
-    uint8_t rtc_a = cmos_read8(RTC_AREG);
-    rtc_a = rtc_a | RTC_500MS_RATE;
-    cmos_write8(RTC_AREG, rtc_a);
+    cmos_write8(RTC_AREG, cmos_read8(RTC_AREG) | 0xF);
+    cmos_write8(RTC_BREG, cmos_read8(RTC_BREG) | RTC_PIE);
 }
 
 uint8_t
 rtc_check_status(void) {
     // LAB 4: Your code here
     // (use cmos_read8())
-    cmos_read8(RTC_CREG);
-    return 0;
+    return cmos_read8(RTC_CREG);
 }

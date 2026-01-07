@@ -71,7 +71,7 @@ dwarf_read_abbrev_entry(const void *entry, unsigned form, void *buf, int bufsize
     case DW_FORM_block2: {
         /* Read block of 2-byte length followed by 0 to 65535 contiguous information bytes */
         // LAB 2: Your code here
-        uint16_t length = get_unaligned(entry, uint16_t);
+        uint32_t length = get_unaligned(entry, uint32_t);
         entry += sizeof(uint16_t);
         struct Slice slice = {
                 .mem = entry,
@@ -570,6 +570,7 @@ address_by_fname(const struct Dwarf_Addrs *addrs, const char *fname, uintptr_t *
                      * Attribute value can be obtained using dwarf_read_abbrev_entry function. */
                     // LAB 3: Your code here:
                     uintptr_t low_pc = 0;
+
                     do {
                         abbrev_entry += dwarf_read_uleb128(abbrev_entry, &name);
                         abbrev_entry += dwarf_read_uleb128(abbrev_entry, &form);

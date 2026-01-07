@@ -38,6 +38,12 @@ umain(int argc, char **argv) {
     }
     wait(pid);
 
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sigact_handler = SIG_IGN;
+    sigemptyset(&sa.sigact_mask);
+    sigaction(SIGPIPE, &sa, NULL);
+
     binaryname = "pipewriteeof";
     if ((i = pipe(p)) < 0)
         panic("pipe: %i", i);

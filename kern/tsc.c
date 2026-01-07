@@ -193,23 +193,6 @@ print_timer_error(void) {
 
 // LAB 5: Your code here:
 
-static inline int streq(const char* a, const char* b){ return a && b && strcmp(a,b)==0; }
-
-static uint64_t cpu_freq_by(const char* name){
-    if (streq(name,"pit")) return tsc_calibrate();
-    if (streq(name,"hpet0") || streq(name,"hpet1")) {
-        uint64_t f = hpet_cpu_frequency();
-        if (!f) f = tsc_calibrate();
-        return f;
-    }
-    if (streq(name,"pm")) {
-        uint64_t f = pmtimer_cpu_frequency();
-        if (!f) f = tsc_calibrate();
-        return f;
-    }
-    return tsc_calibrate();
-}
-
 static bool timer_started = 0;
 static int timer_id = -1;
 static uint64_t timer = 0;
@@ -217,34 +200,41 @@ static uint64_t freq = 0;
 
 void
 timer_start(const char *name) {
-    uint64_t f = cpu_freq_by(name);
-    if (!f) { print_timer_error(); return; }
-    freq = f;
-    timer = read_tsc();
-    timer_started = 1;
-    if (streq(name,"pit")) timer_id = 0;
-    else if (streq(name,"hpet0")) timer_id = 1;
-    else if (streq(name,"hpet1")) timer_id = 2;
-    else if (streq(name,"pm")) timer_id = 3;
-    else timer_id = -1;
+    //(void)timer_started;
+    //(void)timer_id;
+    //(void)timer;
+    //(void)freq;
+
+    for (int i = 0; i < MAX_TIMERS; ++i) {
+        if (timertab[i].timer_name && !strcmp(timertab[i].timer_name, name)) {
+            timer_id = i;
+            timer_started = 1;
+            timer = read_tsc();
+            freq = timertab[i].get_cpu_freq();
+            return;
+        }
+    }
+    print_timer_error();
 }
 
 void
 timer_stop(void) {
-    if (!timer_started || !freq) { print_timer_error(); return; }
-    uint64_t now = read_tsc();
-    uint64_t dt = now - timer;
-    unsigned secs = (unsigned)(dt / freq);
-    print_time(secs);
+    if (!timer_started) {
+        print_timer_error();
+        return;
+    }
+    print_time((read_tsc() - timer) / freq);
     timer_started = 0;
-    timer_id = -1;
-    timer = 0;
-    freq = 0;
 }
 
 void
 timer_cpu_frequency(const char *name) {
-    uint64_t f = cpu_freq_by(name);
-    if (!f) { print_timer_error(); return; }
-    cprintf("%llu\n", (unsigned long long)f);
+    for (int i = 0; i < MAX_TIMERS; i++) {
+        if (timertab[i].timer_name && !strcmp(timertab[i].timer_name, name)) {
+            cprintf("%lu\n", timertab[i].get_cpu_freq());
+            return;
+        }
+    }
+
+    print_timer_error();
 }

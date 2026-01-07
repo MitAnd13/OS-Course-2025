@@ -66,65 +66,44 @@ name:                               \
 .type _alltraps, @function;
 .align 2
 _alltraps:
-    # LAB 8: Your code here
-    # Complete `struct Trapframe' on stack
-    # NOTE: Members after tf_paddind4 already on stack.
-    #       For struct PushRegs you can use PUSHA macro.
-
-    subq $16, %rsp
-    PUSHA
-
-    # LAB 8: Your code here
-    # Invoke `trap' with a pointer to struct trap as an argument.
-    movw $GD_KD, 120(%rsp)
-    movw $GD_KD, 128(%rsp)
-
-    movw $GD_KD, %ax
-    movw %ax, %ds
-    movw %ax, %es
-
-    movq %rsp, %rdi
-    call trap
-
-    jmp .
+  subq $16,%rsp
+  movw %ds,8(%rsp)
+  movw %es,(%rsp)
+  PUSHA
+  movl $GD_KD,%eax
+  movw %ax,%ds
+  movw %ax,%es
+  movq %rsp, %rdi
+  call trap
+  jmp .
 
 # LAB 8: Your code here
 # Use TRAPHANDLER or TRAPHANDLER_NOEC to setup
 # all trap handlers' entry points
 # (Look up their list in inc/trap.h)
+TRAPHANDLER_NOEC(clock_thdlr, IRQ_OFFSET + IRQ_CLOCK) 
+TRAPHANDLER_NOEC(timer_thdlr, IRQ_OFFSET + IRQ_TIMER)
+TRAPHANDLER_NOEC(kbd_thdlr, IRQ_OFFSET + IRQ_KBD)
+TRAPHANDLER_NOEC(serial_thdlr, IRQ_OFFSET + IRQ_SERIAL)
 
-# 0–7: без кода ошибки
-TRAPHANDLER_NOEC(th_divide,  T_DIVIDE)   # 0: divide error
-TRAPHANDLER_NOEC(th_debug,   T_DEBUG)    # 1: debug
-TRAPHANDLER_NOEC(th_nmi,     T_NMI)      # 2: NMI
-TRAPHANDLER_NOEC(th_brkpt,   T_BRKPT)    # 3: breakpoint
-TRAPHANDLER_NOEC(th_oflow,   T_OFLOW)    # 4: overflow
-TRAPHANDLER_NOEC(th_bound,   T_BOUND)    # 5: bounds
-TRAPHANDLER_NOEC(th_illop,   T_ILLOP)    # 6: illegal opcode
-TRAPHANDLER_NOEC(th_device,  T_DEVICE)   # 7: device not available
-
-TRAPHANDLER(th_dblflt,  T_DBLFLT)        # 8: double fault
-
-TRAPHANDLER(th_tss,     T_TSS)           # 10: invalid TSS
-TRAPHANDLER(th_segnp,   T_SEGNP)         # 11: segment not present
-TRAPHANDLER(th_stack,   T_STACK)         # 12: stack fault
-TRAPHANDLER(th_gpflt,   T_GPFLT)         # 13: general protection
-TRAPHANDLER(th_pgflt,   T_PGFLT)         # 14: page fault
-
-TRAPHANDLER_NOEC(th_fperr,   T_FPERR)    # 16: floating point error
-TRAPHANDLER(th_align,        T_ALIGN)    # 17: alignment check (имеет errcode)
-TRAPHANDLER_NOEC(th_mchk,    T_MCHK)     # 18: machine check
-TRAPHANDLER_NOEC(th_simderr, T_SIMDERR)  # 19: SIMD FP error
-
-TRAPHANDLER_NOEC(th_syscall, T_SYSCALL)  # 48: system call
-TRAPHANDLER_NOEC(trap_syscall, T_SYSCALL)
-
-TRAPHANDLER_NOEC(trap_irq_timer,   IRQ_OFFSET + IRQ_TIMER)
-TRAPHANDLER_NOEC(trap_irq_clock,   IRQ_OFFSET + IRQ_CLOCK)
-TRAPHANDLER_NOEC(trap_irq_spurious, IRQ_OFFSET + IRQ_SPURIOUS)
-TRAPHANDLER_NOEC(trap_irq_kbd,     IRQ_OFFSET + IRQ_KBD)
-TRAPHANDLER_NOEC(trap_irq_serial,  IRQ_OFFSET + IRQ_SERIAL)
-TRAPHANDLER_NOEC(trap_irq_ide,     IRQ_OFFSET + IRQ_IDE)
-TRAPHANDLER_NOEC(trap_irq_error,   IRQ_OFFSET + IRQ_ERROR)
+TRAPHANDLER_NOEC(thdlr0, T_DIVIDE)
+TRAPHANDLER_NOEC(thdlr1, T_DEBUG)
+TRAPHANDLER_NOEC(thdlr2, T_NMI)
+TRAPHANDLER_NOEC(thdlr3, T_BRKPT)
+TRAPHANDLER_NOEC(thdlr4, T_OFLOW)
+TRAPHANDLER_NOEC(thdlr5, T_BOUND)
+TRAPHANDLER_NOEC(thdlr6, T_ILLOP)
+TRAPHANDLER_NOEC(thdlr7, T_DEVICE)
+TRAPHANDLER(thdlr8, T_DBLFLT)
+TRAPHANDLER(thdlr10, T_TSS)
+TRAPHANDLER(thdlr11, T_SEGNP)
+TRAPHANDLER(thdlr12, T_STACK)
+TRAPHANDLER(thdlr13, T_GPFLT)
+TRAPHANDLER(thdlr14, T_PGFLT)
+TRAPHANDLER_NOEC(thdlr16, T_FPERR)
+TRAPHANDLER(thdlr17, T_ALIGN)
+TRAPHANDLER_NOEC(thdlr18, T_MCHK)
+TRAPHANDLER_NOEC(thdlr19, T_SIMDERR)
+TRAPHANDLER_NOEC(thdlr48, T_SYSCALL)
 
 #endif

@@ -66,34 +66,23 @@ platform_abort() {
  */
 
 static bool
-asan_shadow_allocator(struct UTrapframe *utf) {
-    uptr va = (uptr)utf->utf_fault_va;
+asan_shadow_allocator(struct UTrapframe *utf)
+{
+    uintptr_t va = (uintptr_t)utf->utf_fault_va;
 
-    uptr sh0 = (uptr)asan_internal_shadow_start;
-    uptr sh1 = (uptr)asan_internal_shadow_end;
-    uptr off = (uptr)asan_internal_shadow_off;
-
-    if (va < sh0 || va >= sh1)
+    if (!SHADOW_ADDRESS_VALID((void*)va))
         return 0;
 
-    if (va < off)
+    uintptr_t self_lo = (uintptr_t)SHADOW_FOR_ADDRESS((uintptr_t)asan_internal_shadow_start);
+    uintptr_t self_hi = (uintptr_t)SHADOW_FOR_ADDRESS((uintptr_t)asan_internal_shadow_end - 1) + 1;
+
+    if (va >= self_lo && va < self_hi)
         return 0;
 
-    uptr orig = (va - off) << 3;
-    if (orig >= sh0 && orig < sh1)
-        return 0;
+    uintptr_t base = ROUNDDOWN(va, SHADOW_STEP);
 
-    uptr start = ROUNDDOWN(va, SHADOW_STEP);
-    uptr end = start + SHADOW_STEP;
-    if (end > sh1)
-        end = sh1;
-
-    size_t size = (size_t)(end - start);
-
-    int r = sys_alloc_region(0, (void *)start, size,
-                             PROT_R | PROT_W | ALLOC_ZERO);
-    if (r < 0)
-        return 0;
+    if (sys_alloc_region(CURENVID, (void*)base, SHADOW_STEP, ALLOC_ONE | PROT_RW) < 0)
+        platform_abort();
 
     return 1;
 }
@@ -122,11 +111,7 @@ static int
 asan_unpoison_shared_region(void *start, void *end, void *arg) {
     (void)start, (void)end, (void)arg;
     // LAB 8: Your code here
-    uptr s = (uptr)start;
-    uptr e = (uptr)end;
-    if (e > s) {
-        platform_asan_unpoison((void *)s, e - s);
-    }
+    platform_asan_unpoison(start, (size_t)(end - start));
     return 0;
 }
 
@@ -145,30 +130,19 @@ platform_asan_init(void) {
 
     /* 1. Program segments (text, data, rodata, bss) */
     // LAB 8: Your code here
-    platform_asan_unpoison(&__text_start,
-                           (size_t)(&__text_end - &__text_start));
-    platform_asan_unpoison(&__rodata_start,
-                           (size_t)(&__rodata_end - &__rodata_start));
-    platform_asan_unpoison(&__data_start,
-                           (size_t)(&__data_end - &__data_start));
-    platform_asan_unpoison(&__bss_start,
-                           (size_t)(&__bss_end - &__bss_start));
+    platform_asan_unpoison(&__text_start, &__text_end - &__text_start);
+    platform_asan_unpoison(&__data_start, &__data_end - &__data_start);
+    platform_asan_unpoison(&__rodata_start, &__rodata_end - &__rodata_start);
+    platform_asan_unpoison(&__bss_start, &__bss_end - &__bss_start);
 
     /* 2. Stacks (USER_EXCEPTION_STACK_TOP, USER_STACK_TOP) */
     // LAB 8: Your code here
-    platform_asan_unpoison(
-        (void *)(USER_EXCEPTION_STACK_TOP - USER_EXCEPTION_STACK_SIZE),
-        USER_EXCEPTION_STACK_SIZE
-    );
-    platform_asan_unpoison(
-        (void *)(USER_STACK_TOP - USER_STACK_SIZE),
-        USER_STACK_SIZE
-    );
+    platform_asan_unpoison((void *)(USER_STACK_TOP - USER_STACK_SIZE), USER_STACK_SIZE);
+    platform_asan_unpoison((void *)(USER_EXCEPTION_STACK_TOP - USER_EXCEPTION_STACK_SIZE), USER_EXCEPTION_STACK_SIZE);
 
     /* 3. Kernel exposed info (UENVS, UVSYS (only for lab 12)) */
     // LAB 8: Your code here
-    platform_asan_unpoison((void *)UENVS,
-                           (size_t)UENVS_SIZE);
+    platform_asan_unpoison((void *)UENVS, UENVS_SIZE);
 
     // TODO NOTE: LAB 12 code may be here
 #if LAB >= 12
@@ -179,6 +153,7 @@ platform_asan_init(void) {
 #if LAB >= 11
     foreach_shared_region(asan_unpoison_shared_region, NULL);
 #endif
+
 }
 
 void
@@ -211,8 +186,7 @@ platform_asan_fatal(const char *msg, uptr p, size_t width, unsigned access_type)
 bool
 platform_asan_fakestack_enter(uint32_t *thread_id) {
     // TODO: implement!
-    (void)thread_id;
-    return false;
+    return true;
 }
 
 void

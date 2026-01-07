@@ -51,8 +51,8 @@ struct File {
 #define BLKFILES (BLKSIZE / sizeof(struct File))
 
 /* File types */
-#define FTYPE_REG 0 /* Regular file */
-#define FTYPE_DIR 1 /* Directory */
+#define FTYPE_REG  0 /* Regular file */
+#define FTYPE_DIR  1 /* Directory */
 
 /* File system super-block (both in-memory and on-disk) */
 
@@ -82,6 +82,7 @@ union Fsipc {
     struct Fsreq_open {
         char req_path[MAXPATHLEN];
         int req_omode;
+        uintptr_t req_fd_data;
     } open;
     struct Fsreq_set_size {
         int req_fileid;

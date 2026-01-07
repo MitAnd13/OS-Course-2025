@@ -4,6 +4,7 @@
 #define JOS_INC_ENV_H
 
 #include <inc/types.h>
+#include <inc/signal.h>
 #include <inc/trap.h>
 #include <inc/memlayout.h>
 
@@ -74,6 +75,17 @@ struct Env {
 
     /* Exception handling */
     void *env_pgfault_upcall; /* Page fault upcall entry point */
+
+    /* Signal handling */
+    void *env_sigentry;                          /* Signal trampoline entry */
+    sigset_t env_sig_mask;                       /* Blocked signal mask */
+    bool env_sig_waiting;                        /* Waiting in sigwait */
+    sigset_t env_sig_wait_set;                   /* sigwait set */
+    sigset_t env_sig_wait_oldmask;               /* mask to restore after sigwait */
+    uintptr_t env_sig_wait_dst;                  /* user pointer to store signo */
+    struct sigaction env_sig_actions[NSIG];      /* per-signal action */
+    struct SigQueueEntry env_sig_queue[SIG_QUEUE_MAX];
+    uint16_t env_sig_queue_len;
 
     /* LAB 9 IPC */
     bool env_ipc_recving;    /* Env is blocked receiving */

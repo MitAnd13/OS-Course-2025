@@ -22,8 +22,8 @@ void platform_asan_unpoison(void *, size_t);
 void platform_asan_poison(void *, size_t);
 /* not sanitized memset allows us to access "invalid" areas for extra poisoning. */
 void __nosan_memset(void *, int, size_t);
-void __nosan_memcpy(void *, void *, size_t);
-void __nosan_memmove(void *, void *, size_t);
+void __nosan_memcpy(void *, const void *, size_t);
+void __nosan_memmove(void *, const void *, size_t);
 #define nosan_memmove __nosan_memmove
 #define nosan_memcpy  __nosan_memcpy
 #define nosan_memset  __nosan_memset
@@ -112,13 +112,13 @@ void init_memory(void);
 void release_address_space(struct AddressSpace *space);
 struct AddressSpace *switch_address_space(struct AddressSpace *space);
 int init_address_space(struct AddressSpace *space);
+int user_mem_check(struct Env *env, const void *va, size_t len, int perm);
 void user_mem_assert(struct Env *env, const void *va, size_t len, int perm);
 int region_maxref(struct AddressSpace *spc, uintptr_t addr, size_t size);
 int force_alloc_page(struct AddressSpace *spc, uintptr_t va, int maxclass);
 void dump_page_table(pte_t *pml4);
 void dump_memory_lists(void);
 void dump_virtual_tree(struct Page *node, int class);
-int user_mem_check(struct Env *env, const void *va, size_t len, int perm);
 
 void *kzalloc_region(size_t size);
 

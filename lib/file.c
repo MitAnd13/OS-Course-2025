@@ -77,6 +77,7 @@ open(const char *path, int mode) {
 
     strcpy(fsipcbuf.open.req_path, path);
     fsipcbuf.open.req_omode = mode;
+    fsipcbuf.open.req_fd_data = (uintptr_t)fd2data(fd);
 
     if ((res = fsipc(FSREQ_OPEN, fd)) < 0) {
         fd_close(fd, 0);
@@ -112,24 +113,29 @@ devfile_read(struct Fd *fd, void *buf, size_t n) {
      * bytes read will be written back to fsipcbuf by the file
      * system server. */
 
-    // LAB 10: Your code here:
-    int res = 0;
-    int size = 0;
-    while (n > 0) {
+    // LAB 10: Your code here: DONE
+    size_t res0 = 0;
+    (void)fd, (void)buf, (void)n;
+
+    int status = 0;
+
+    while (res0 < n) {
         fsipcbuf.read.req_fileid = fd->fd_file.id;
-        fsipcbuf.read.req_n = MIN(n, sizeof(fsipcbuf.readRet.ret_buf));
-        res = fsipc(FSREQ_READ, NULL);
-        if (res <= 0) { 
-            if (size > 0) return size;
-            return res;
+        fsipcbuf.read.req_n = n;
+
+        status = fsipc(FSREQ_READ, NULL);
+
+        if (status <= 0) {
+            return status ? status : res0;
         }
-        memcpy(buf, fsipcbuf.readRet.ret_buf, res);
-        buf = (void *)((uintptr_t)buf + res);
-        n -= res;
-        size += res;
+
+        memcpy(buf, fsipcbuf.readRet.ret_buf, status);
+
+        buf += status;
+        res0 += status;
     }
 
-    return size;
+    return res0;
 }
 
 /* Write at most 'n' bytes from 'buf' to 'fd' at the current seek position.
@@ -145,23 +151,28 @@ devfile_write(struct Fd *fd, const void *buf, size_t n) {
      * bytes than requested, so that multiple IPC requests are
      * potentially required. */
 
-    // LAB 10: Your code here:
-    int res = 0;
-    int size = 0;
-    while (n > 0) {
+    // LAB 10: Your code here: DONE
+    size_t res0 = 0;
+    (void)fd, (void)buf, (void)n;
+    int status = 0;
+
+    while (res0 < n) {
+        size_t next = MIN(n, sizeof(fsipcbuf.write.req_buf));
+        memcpy(fsipcbuf.write.req_buf, buf, next);
         fsipcbuf.write.req_fileid = fd->fd_file.id;
-        fsipcbuf.write.req_n = MIN(n, sizeof(fsipcbuf.write.req_buf));
-        memcpy(fsipcbuf.write.req_buf, buf, MIN(n, sizeof(fsipcbuf.write.req_buf)));
-        res = fsipc(FSREQ_WRITE, NULL);
-        if (res <= 0) { 
-            if (size > 0) return size;
-            return res;
+        fsipcbuf.write.req_n = next;
+
+        status = fsipc(FSREQ_WRITE, NULL);
+
+        if (status < 0) {
+            return status;
         }
-        buf = (void *)((uintptr_t)buf + res);
-        n -= res;
-        size += res;
+
+        buf += status;
+        res0 += status;
     }
-    return size;
+
+    return res0;
 }
 
 /* Get file information */
@@ -195,3 +206,14 @@ sync(void) {
 
     return fsipc(FSREQ_SYNC, NULL);
 }
+
+int
+remove(const char *path) {
+    if (strlen(path) >= MAXPATHLEN)
+        return -E_BAD_PATH;
+
+    strcpy(fsipcbuf.remove.req_path, path);
+    return fsipc(FSREQ_REMOVE, NULL);
+}
+
+
