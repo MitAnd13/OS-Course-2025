@@ -477,6 +477,80 @@ sys_region_refs(uintptr_t addr, size_t size, uintptr_t addr2, uintptr_t size2) {
     }
 }
 
+/* Блокирующий send с таймаутом */
+static int
+sys_ipc_send_timeout(envid_t envid, uint32_t value, uintptr_t srcva, 
+             size_t size, int perm, uint64_t timeout_ticks) {
+    uint64_t start_ticks = get_ticks();
+    uint64_t deadline = start_ticks + timeout_ticks;
+    
+    while (1) {
+        int res = sys_ipc_try_send(envid, value, srcva, size, perm);
+        
+        if (res == 0) {
+            /* Сообщение успешно отправлено */
+            return 0;
+        }
+        
+        if (res != -E_IPC_NOT_RECV) {
+            /* Другая ошибка */
+            return res;
+        }
+        
+        /* Проверяем таймаут */
+        if (timeout_ticks > 0 && get_ticks() >= deadline) {
+            return -E_IPC_TIMEOUT;
+        }
+        
+        /* Освобождаем процессор и ждем */
+        curenv->env_status = ENV_NOT_RUNNABLE;
+        sched_yield();
+    }
+}
+
+/* Recv с таймаутом */
+static int
+sys_ipc_recv_timeout(uintptr_t dstva, uintptr_t maxsize, uint64_t timeout_ticks) {
+    if (dstva < MAX_USER_ADDRESS && 
+        (ROUNDDOWN(dstva, PAGE_SIZE) != dstva || 
+         maxsize == 0 || 
+         ROUNDDOWN(maxsize, PAGE_SIZE) != maxsize))
+        return -E_INVAL;
+
+    struct Env *env = curenv;
+    
+    /* Устанавливаем параметры ожидания */
+    env->env_ipc_recving = 1;
+    env->env_ipc_dstva = dstva;
+    env->env_ipc_maxsz = maxsize;
+    env->env_ipc_timed_out = 0;
+    
+    /* Устанавливаем таймаут, если он задан */
+    if (timeout_ticks > 0) {
+        env->env_ipc_timeout = timeout_ticks;
+        env->env_ipc_start_tick = get_ticks();
+    } else {
+        env->env_ipc_timeout = 0;
+    }
+    
+    /* Сбрасываем поля */
+    env->env_ipc_from = 0;
+    env->env_ipc_value = 0;
+    env->env_ipc_perm = 0;
+    
+    /* Блокируем процесс до получения сообщения или таймаута */
+    env->env_status = ENV_NOT_RUNNABLE;
+    sched_yield();
+    
+    /* Проверяем, был ли таймаут */
+    if (env->env_ipc_timed_out) {
+        return -E_IPC_TIMEOUT;
+    }
+    
+    return 0;
+}
+
+
 /* Dispatches to the correct kernel function, passing the arguments. */
 uintptr_t
 syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6) {
@@ -524,6 +598,12 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
             return sys_env_set_trapframe((envid_t) a1, (struct Trapframe *) a2);
         case SYS_gettime:
             return sys_gettime();
+        case SYS_ipc_send:
+            return sys_ipc_send_timeout((envid_t)a1, (uint32_t)a2, a3, 
+                               (size_t)a4, (int)a5, (uint64_t)a6);
+        
+        case SYS_ipc_recv_timeout:
+            return sys_ipc_recv_timeout(a1, a2, (uint64_t)a3);
     }
 
     return -E_NO_SYS;

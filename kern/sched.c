@@ -23,7 +23,30 @@ sched_yield(void) {
      * If there are no runnable environments,
      * simply drop through to the code
      * below to halt the cpu */
-
+     
+	 /* Проверяем таймауты для всех процессов */
+    for (int i = 0; i < NENV; i++) {
+        if (envs[i].env_status == ENV_NOT_RUNNABLE && 
+            envs[i].env_ipc_recving && 
+            envs[i].env_ipc_timeout > 0) {
+            
+            /* Проверяем, не истек ли таймаут */
+            uint64_t current_ticks = get_ticks();
+            uint64_t elapsed_ticks = current_ticks - envs[i].env_ipc_start_tick;
+            
+            if (elapsed_ticks >= envs[i].env_ipc_timeout) {
+                /* Таймаут истек, пробуждаем процесс с ошибкой */
+                envs[i].env_ipc_timed_out = true;
+                envs[i].env_ipc_recving = false;
+                envs[i].env_status = ENV_RUNNABLE;
+                
+                /* Сбрасываем поля IPC */
+                envs[i].env_ipc_from = 0;
+                envs[i].env_ipc_value = 0;
+                envs[i].env_ipc_perm = 0;
+            }
+        }
+    }
     // LAB 3: Your code here:
     int id  = curenv ? ENVX(curenv->env_id) : 0;
     int j;
