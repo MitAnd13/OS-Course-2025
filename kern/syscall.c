@@ -400,8 +400,13 @@ sys_ipc_try_send(envid_t envid, uint32_t value, uintptr_t srcva, size_t size, in
  *  -E_INVAL if dstva < MAX_USER_ADDRESS but dstva is not page-aligned;
  *  -E_INVAL if dstva is valid and maxsize is 0,
  *  -E_INVAL if maxsize is not page aligned. */
+static inline uint64_t
+now_ms(void) {
+    return (uint64_t)gettime() * 1000ULL;
+}
+
 static int
-sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize) {
+sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize, uint32_t timeout_ms) {
     // LAB 9: Your code here
     if (dstva < MAX_USER_ADDRESS && (ROUNDDOWN(dstva, PAGE_SIZE) != dstva || maxsize == 0 || ROUNDDOWN(maxsize, PAGE_SIZE) != maxsize))
         return -E_INVAL;
@@ -412,11 +417,14 @@ sys_ipc_recv(uintptr_t dstva, uintptr_t maxsize) {
     if (res < 0 || env == NULL) {
         return -E_BAD_ENV;
     }
+    lock_kernel();
     env->env_ipc_dstva = dstva;
     env->env_ipc_maxsz = maxsize;
     env->env_status = ENV_NOT_RUNNABLE;
     env->env_ipc_from = 0;
     env->env_ipc_recving = 1;
+    env->env_ipc_deadline_ms = timeout_ms ? now_ms() + (uint64_t)timeout_ms : 0;
+    unlock_kernel();
 
     return 0;
 }
@@ -515,7 +523,29 @@ syscall(uintptr_t syscallno, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t
         case SYS_ipc_try_send:
             return sys_ipc_try_send((envid_t)a1, (uint32_t)a2, a3, (size_t)a4, (int)a5);
         case SYS_ipc_recv:
-            return sys_ipc_recv(a1, a2);
+            return sys_ipc_recv(a1, a2, (uint32_t)a3);
+        case SYS_ipc_send:
+            {
+                /* Blocking send with timeout: first try immediate send, otherwise park sender */
+                uint32_t timeout_ms = (uint32_t)a6;
+                int sres = sys_ipc_try_send((envid_t)a1, (uint32_t)a2, a3, (size_t)a4, (int)a5);
+                if (sres == 0 || sres == -E_BAD_ENV) return sres;
+                if (sres != -E_IPC_NOT_RECV) return sres;
+                struct Env *sender = NULL;
+                int r = envid2env(0, &sender, false);
+                if (r < 0 || !sender) return r;
+                lock_kernel();
+                sender->env_ipc_sending = true;
+                sender->env_ipc_send_target = (envid_t)a1;
+                sender->env_ipc_send_value = (uint32_t)a2;
+                sender->env_ipc_send_srcva = a3;
+                sender->env_ipc_send_size = (size_t)a4;
+                sender->env_ipc_send_perm = (int)a5;
+                sender->env_ipc_send_deadline_ms = timeout_ms ? now_ms() + (uint64_t)timeout_ms : 0;
+                sender->env_status = ENV_NOT_RUNNABLE;
+                unlock_kernel();
+                return 0;
+            }
         case SYS_map_physical_region:
             return sys_map_physical_region(a1, (envid_t)a2, a3, (size_t)a4, (int)a5);
         case SYS_region_refs:

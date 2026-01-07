@@ -82,6 +82,16 @@ struct Env {
     uint32_t env_ipc_value;  /* Data value sent to us */
     envid_t env_ipc_from;    /* envid of the sender */
     int env_ipc_perm;        /* Perm of page mapping received */
+
+    /* IPC timeouts and blocking send state */
+    uint64_t env_ipc_deadline_ms;     /* deadline for recv in ms since boot */
+    bool     env_ipc_sending;         /* Env is blocked sending */
+    envid_t  env_ipc_send_target;     /* destination env for send */
+    uintptr_t env_ipc_send_srcva;     /* source VA for page/region */
+    size_t    env_ipc_send_size;      /* size of region to send */
+    int       env_ipc_send_perm;      /* permissions for region */
+    uint32_t  env_ipc_send_value;     /* value to send */
+    uint64_t  env_ipc_send_deadline_ms; /* deadline for send in ms */
 };
 
 #endif /* !JOS_INC_ENV_H */

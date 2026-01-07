@@ -143,14 +143,18 @@ sys_ipc_try_send(envid_t envid, uintptr_t value, void *srcva, size_t size, int p
 }
 
 int
-sys_ipc_recv(void *dstva, size_t size) {
-    int res = syscall(SYS_ipc_recv, 1, (uintptr_t)dstva, size, 0, 0, 0, 0);
+sys_ipc_recv(void *dstva, size_t size, uint32_t timeout_ms) {
+    int res = syscall(SYS_ipc_recv, 1, (uintptr_t)dstva, size, timeout_ms, 0, 0, 0);
 #ifdef SANITIZE_USER_SHADOW_BASE
     if (!res) platform_asan_unpoison(dstva, thisenv->env_ipc_maxsz);
 #endif
     return res;
 }
 
+int
+sys_ipc_send(envid_t envid, uint64_t value, void *srcva, size_t size, int perm, uint32_t timeout_ms) {
+    return syscall(SYS_ipc_send, 0, envid, value, (uintptr_t)srcva, size, perm, timeout_ms);
+}
 int
 sys_gettime(void) {
     return syscall(SYS_gettime, 0, 0, 0, 0, 0, 0, 0);

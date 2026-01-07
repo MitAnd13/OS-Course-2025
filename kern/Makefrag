@@ -28,6 +28,7 @@ KERN_SRCFILES := kern/bootstrap.S \
 			kern/timer.c \
 			kern/sched.c \
 			kern/syscall.c \
+			kern/ipc_timeout.c \
 			kern/kdebug.c \
 			lib/printfmt.c \
 			lib/readline.c \

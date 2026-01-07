@@ -25,7 +25,7 @@ ipc_recv(envid_t *from_env_store, void *pg, size_t *size, int *perm_store) {
     void *dstva = pg ? pg : (void *)MAX_USER_ADDRESS;
     size_t maxsz = pg ? (size ? *size : PAGE_SIZE) : 0;
 
-    int r = sys_ipc_recv(dstva, maxsz);
+    int r = sys_ipc_recv(dstva, maxsz, 0);
     if (r < 0) {
         if (from_env_store) *from_env_store = 0;
         if (perm_store) *perm_store = 0;
@@ -37,6 +37,23 @@ ipc_recv(envid_t *from_env_store, void *pg, size_t *size, int *perm_store) {
     if (perm_store) *perm_store = thisenv->env_ipc_perm;
     if (size) *size = thisenv->env_ipc_maxsz;
 
+    return (int32_t)thisenv->env_ipc_value;
+}
+
+int32_t
+ipc_recv_timeout(envid_t *from_env_store, void *pg, size_t *size, int *perm_store, uint32_t timeout_ms) {
+    void *dstva = pg ? pg : (void *)MAX_USER_ADDRESS;
+    size_t maxsz = pg ? (size ? *size : PAGE_SIZE) : 0;
+    int r = sys_ipc_recv(dstva, maxsz, timeout_ms);
+    if (r < 0) {
+        if (from_env_store) *from_env_store = 0;
+        if (perm_store) *perm_store = 0;
+        if (size) *size = 0;
+        return r;
+    }
+    if (from_env_store) *from_env_store = thisenv->env_ipc_from;
+    if (perm_store) *perm_store = thisenv->env_ipc_perm;
+    if (size) *size = thisenv->env_ipc_maxsz;
     return (int32_t)thisenv->env_ipc_value;
 }
 
@@ -55,16 +72,16 @@ ipc_send(envid_t to_env, uint32_t val, void *pg, size_t size, int perm) {
     size_t sendsz = pg ? size : 0;
     int sendperm = pg ? perm : 0;
 
-    for (;;) {
-        int r = sys_ipc_try_send(to_env, (uint64_t)val, srcva, sendsz, sendperm);
-        if (r == 0)
-            return;
-        if (r == -E_IPC_NOT_RECV) {
-            sys_yield();
-            continue;
-        }
-        panic("ipc_send: %i", r);
-    }
+    int r = sys_ipc_send(to_env, (uint64_t)val, srcva, sendsz, sendperm, 0);
+    if (r != 0) panic("ipc_send: %i", r);
+}
+
+int
+ipc_send_timeout(envid_t to_env, uint32_t val, void *pg, size_t size, int perm, uint32_t timeout_ms) {
+    void *srcva = pg ? pg : (void *)MAX_USER_ADDRESS;
+    size_t sendsz = pg ? size : 0;
+    int sendperm = pg ? perm : 0;
+    return sys_ipc_send(to_env, (uint64_t)val, srcva, sendsz, sendperm, timeout_ms);
 }
 
 /* Find the first environment of the given type.  We'll use this to

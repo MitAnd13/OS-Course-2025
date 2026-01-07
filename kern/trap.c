@@ -326,6 +326,10 @@ trap_dispatch(struct Trapframe *tf) {
         // LAB 12: Your code here
         timer_for_schedule->handle_interrupts();
         vsys[VSYS_gettime] = gettime();
+        {
+            extern void ipc_timeout_tick(void);
+            ipc_timeout_tick();
+        }
         sched_yield();
         // LAB 12: Your code here
         return;
