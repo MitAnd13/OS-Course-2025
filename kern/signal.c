@@ -69,7 +69,7 @@ int
 sigqueue_env(struct Env *env, int sig, sigval_t value) {
     if (!sig_valid(sig))
         return -E_INVAL;
-
+        
     if (env->env_sig_waiting && (env->env_sig_wait_set & sig_bit(sig))) {
         struct AddressSpace *old = switch_address_space(&env->address_space);
         user_mem_assert(env, (void *)env->env_sig_wait_dst, sizeof(int), PROT_W);
@@ -85,7 +85,12 @@ sigqueue_env(struct Env *env, int sig, sigval_t value) {
 
     if (env->env_sig_queue_len >= SIG_QUEUE_MAX)
         return -E_NO_MEM;
-
+        
+    if (sig_queue_find_matching(env, sig_bit(sig)) != -1) // If our queue has already got this signal
+    {
+		return 0;
+	}
+		
     env->env_sig_queue[env->env_sig_queue_len].signo = sig;
     env->env_sig_queue[env->env_sig_queue_len].value = value;
     env->env_sig_queue_len++;
